@@ -25,7 +25,8 @@ public:
         return std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
     }
     double toSeconds() const {
-        return std::chrono::duration_cast<std::chrono::seconds>(duration).count();
+        auto us = std::chrono::duration_cast<std::chrono::microseconds>(duration).count();
+        return static_cast<double>(us) / 1'000'000;
     }
     operator std::chrono::nanoseconds() const {
         return duration;

@@ -50,12 +50,14 @@ cd bin && sudo ./autoaim_infantry
 - [ ] 反陀螺  
 ### 算法实现
 - [ ] 匹配和分配序号算法  
-- [ ] 预测器初始化函数  
+- [x] 预测器初始化函数  
 - [ ] 火控逻辑编写  
 - [ ] JSON配置  
 - [ ] 合适的日志输出  
 - [ ] udpsender编写
 - [ ] 代码文档  
+- [ ] 棋盘格自动标定
+- [ ] cameraOffset自动计算
 ### 模块检查
 - [x] driver  
 - [x] detector  
@@ -63,6 +65,16 @@ cd bin && sudo ./autoaim_infantry
 - [ ] controller  
 - [ ] tracker  
 - [ ] predictor  
+### BUG Lists
+- [x] measure出现nan，怀疑是solvepnp/asin/atan2出问题（这些地方都未做检查） 罕见
+- [x] optimize error 10 较常见
+- [ ] optimize 中途出现nan （传入正常） 罕见
+- [x] 使用predict冲突 出现memory错误 常见
+- [ ] yaw -170 -> 170 应该柔和过渡 常见
+- [x] 运行时间长时段错误 较常见
+- [x] 莫名奇妙的卡顿/卡死
+- [ ] solver结果不准确
+- [ ] predictor亟需调参
 
 ## Feature
 ### 工程特色

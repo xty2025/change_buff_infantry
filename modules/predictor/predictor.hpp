@@ -4,11 +4,13 @@
 #include "MotionModel.hpp"
 #include <Eigen/Core>
 #include <opencv2/opencv.hpp>
+#include <cppad/cppad.hpp>
 
 namespace predictor {
 
 class Predictor : public modules::Predictor {
 private:
+    std::mutex car_mutex;
     std::map<int, std::unique_ptr<MotionModel>> cars;
     std::map<int, int> detect_count;//detected then set to 0, not detected then add 1, upper than 10 then delete.
 public:

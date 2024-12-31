@@ -12,6 +12,7 @@ namespace predictor {
     Predictions Predictor::predict(Time::TimeStamp timestamp)
     {
         Predictions predictions;
+        std::lock_guard<std::mutex> lock(car_mutex);
         for(auto& [carid, car] : cars)
         {
             predictions.push_back(car->getPredictResult(timestamp, carid));
@@ -24,9 +25,11 @@ namespace predictor {
         {
             if(cars.find(trackResult.car_id) == cars.end())
             {
+                std::lock_guard<std::mutex> lock(car_mutex);
                 cars[trackResult.car_id] = std::make_unique<MotionModel>();
+                cars[trackResult.car_id]->initMotionModel();
             }
-            Dvector measure;
+            Dvector measure(4);
             measure[0] = trackResult.location.pitch;
             measure[1] = trackResult.location.yaw;
             measure[2] = trackResult.location.distance;
@@ -34,6 +37,7 @@ namespace predictor {
             cars[trackResult.car_id]->Update(measure, timestamp, trackResult.armor_id);
             detect_count[trackResult.car_id] = 0;
         }
+        std::lock_guard<std::mutex> lock(car_mutex);
         for(auto it = detect_count.begin(); it != detect_count.end();)
         {
             if(it->second > 10)
@@ -42,7 +46,10 @@ namespace predictor {
                 it = detect_count.erase(it);
             }
             else
+            {
+                it->second++;
                 ++it;
+            }
         }
     }
 

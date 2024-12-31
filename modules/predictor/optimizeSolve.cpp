@@ -12,7 +12,9 @@ bool OptimizeSolve::Update(const Dvector &measure, const Time::TimeStamp &timest
     history_measure.push_back(measure);
     history_timepoint.push_back(timestamp);
     history_measure_id.push_back(measure_id);
-    if(history_measure.size() == 0) {
+    if(history_measure.size() <= 1) {
+        state = first_state_estimate(measure, measure_id);
+        eigen_state = Eigen::Map<Eigen::VectorXd>(state.data(), state.size());
         return true;
     }
     state = ideal_stateUpdate_noAD(state, (timestamp - history_timepoint[history_timepoint.size() - 2]).toSeconds());
@@ -35,6 +37,9 @@ bool OptimizeSolve::Update(const Dvector &measure, const Time::TimeStamp &timest
     bool ok = solution.status == CppAD::ipopt::solve_result<Dvector>::success;
     if(!ok) WARN("Optimization failed, status: {}", static_cast<int>(solution.status));
     state = solution.x;
+    std::lock_guard<std::mutex> lock(state_mutex);
+    eigen_state = Eigen::Map<Eigen::VectorXd>(state.data(), state.size());
+    last_timestamp = timestamp;
     return ok;
 }
 
@@ -58,6 +63,37 @@ CppAD::AD<double> OptimizeSolve::loss(const ADvector &state_) {
         decay *= decay_rate;
     }
     return measure_loss * state_change_loss;
+}
+
+Dvector OptimizeSolve::ideal_stateUpdate_noAD(const Dvector& state, const double dt)
+{
+    ADvector state_AD(state.size());
+    for (int i = 0; i < state.size(); i++)
+    {
+        state_AD[i] = state[i];
+    }
+    ADvector state_update = ideal_stateUpdate(state_AD, dt);
+    Dvector state_update_noAD(state_update.size());
+    for (int i = 0; i < state_update.size(); i++)
+    {
+        state_update_noAD[i] = CppAD::Value(state_update[i]);
+    }
+    return state_update_noAD;
+}
+Dvector OptimizeSolve::ideal_measure_noAD(const Dvector& state, const int measure_id)
+{
+    ADvector state_AD(state.size());
+    for (int i = 0; i < state.size(); i++)
+    {
+        state_AD[i] = state[i];
+    }
+    ADvector measure = ideal_measure(state_AD, measure_id);
+    Dvector measure_noAD(measure.size());
+    for (int i = 0; i < measure.size(); i++)
+    {
+        measure_noAD[i] = CppAD::Value(measure[i]);
+    }
+    return measure_noAD;
 }
 
 } // namespace StateFitting

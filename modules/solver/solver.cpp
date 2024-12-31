@@ -7,13 +7,13 @@ auto modules::createSolver() -> std::unique_ptr<modules::Solver> {
 
 namespace solver {
 
-XYV Solver::world2camera(const PYD& point, const ImuData& imuData) {
+XYV Solver::world2camera(const PYD& point, const ImuData& imuData_deg) {
     XYV xyv(0,0);
-    
+    auto imu_roll = imuData_deg.roll * M_PI / 180, imu_pitch = imuData_deg.pitch * M_PI / 180, imu_yaw = imuData_deg.yaw * M_PI / 180;
     // 构建旋转矩阵 - 按照 roll(Z) -> pitch(Y) -> yaw(X) 的顺序
-    Eigen::Matrix3d R = (Eigen::AngleAxisd(imuData.roll, Eigen::Vector3d::UnitZ()).toRotationMatrix() 
-                     * Eigen::AngleAxisd(imuData.pitch, Eigen::Vector3d::UnitY()).toRotationMatrix()
-                     * Eigen::AngleAxisd(imuData.yaw, Eigen::Vector3d::UnitX()).toRotationMatrix());
+    Eigen::Matrix3d R = (Eigen::AngleAxisd(imu_yaw, Eigen::Vector3d::UnitZ()).toRotationMatrix() 
+                     * Eigen::AngleAxisd(-imu_pitch, Eigen::Vector3d::UnitY()).toRotationMatrix()
+                     * Eigen::AngleAxisd(imu_roll, Eigen::Vector3d::UnitX()).toRotationMatrix());
 
     // 世界坐标点
     Eigen::Vector3d P_w(point.distance * cos(point.pitch) * cos(point.yaw),
@@ -21,7 +21,7 @@ XYV Solver::world2camera(const PYD& point, const ImuData& imuData) {
                         point.distance * sin(point.pitch));
     
     // 转换到相机坐标系
-    Eigen::Vector3d P_c = R * (P_w - cameraOffset);
+    Eigen::Vector3d P_c = R.inverse() * P_w - cameraOffset;
     
     // 应用相机内参矩阵
     Eigen::Vector3d P_i = cameraIntrinsicMatrix * P_c;
@@ -39,14 +39,15 @@ XYV Solver::world2camera(const PYD& point, const ImuData& imuData) {
     return xyv;
 }
 
-PYDs Solver::camera2world(const ArmorXYVs& trackResults, const ImuData& imuData, bool isLarge) {
+PYDs Solver::camera2world(const ArmorXYVs& trackResults, const ImuData& imuData_deg, bool isLarge) {
     PYDs pyds;
     cv::Mat cameraMatrix, distCoeffs;
     cv::eigen2cv(cameraIntrinsicMatrix, cameraMatrix);
     cv::eigen2cv(distorationCoefficients, distCoeffs);
-    Eigen::Matrix3d R = (Eigen::AngleAxisd(imuData.roll, Eigen::Vector3d::UnitZ()).toRotationMatrix() 
-                    * Eigen::AngleAxisd(imuData.pitch, Eigen::Vector3d::UnitY()).toRotationMatrix()
-                    * Eigen::AngleAxisd(imuData.yaw, Eigen::Vector3d::UnitX()).toRotationMatrix());
+    auto imu_roll = imuData_deg.roll * M_PI / 180, imu_pitch = imuData_deg.pitch * M_PI / 180, imu_yaw = imuData_deg.yaw * M_PI / 180;
+    Eigen::Matrix3d R = (Eigen::AngleAxisd(imu_yaw, Eigen::Vector3d::UnitZ()).toRotationMatrix() 
+                    * Eigen::AngleAxisd(-imu_pitch, Eigen::Vector3d::UnitY()).toRotationMatrix()
+                    * Eigen::AngleAxisd(imu_roll, Eigen::Vector3d::UnitX()).toRotationMatrix());
     
     for (const auto& trackResult : trackResults) {
         if (trackResult.size() != 4) {
@@ -70,7 +71,10 @@ PYDs Solver::camera2world(const ArmorXYVs& trackResults, const ImuData& imuData,
         // 反投影获取相机坐标系下的射线方向
         Eigen::Vector3d ray_c(center_x, center_y, 1.0);  // 归一化平面坐标
         ray_c = cameraIntrinsicMatrix.inverse() * ray_c;  // 转换到相机坐标系
-        ray_c.normalize();  // 单位化
+        //ray_c.normalize();  // 单位化
+        double ray_pitch = -std::atan2(ray_c.y(), ray_c.z());
+        double ray_yaw = -std::atan2(ray_c.x(), ray_c.z());
+        ray_c = Eigen::Vector3d(std::cos(ray_pitch) * std::cos(ray_yaw), std::cos(ray_pitch) * std::sin(ray_yaw), std::sin(ray_pitch));
 
         // 计算pitch和yaw
         PYD pyd = PYD::XYZ2PYD(ray_c.x(), ray_c.y(), ray_c.z());
@@ -81,13 +85,19 @@ PYDs Solver::camera2world(const ArmorXYVs& trackResults, const ImuData& imuData,
         cv::Mat rvec, tvec;
         cv::solvePnP(objectPoints, imagePoints, cameraMatrix, distCoeffs, rvec, tvec, false, cv::SOLVEPNP_IPPE);
         Eigen::Vector3d P_c(tvec.at<double>(0), tvec.at<double>(1), tvec.at<double>(2));
-        pyd.distance = P_c.norm();  // 距离
-
+        //********************************************************************************* 
+        //注释掉的是使用solvePnP计算得到的XYZ坐标，目前采用的方案是利用相机内参和dist直接得到XYZ坐标。二者差别不大。
+        //Eigen::Vector3d P_c_temp(P_c.z(),-P_c.x(),-P_c.y());
+        //P_c=P_c_temp;
+        pyd.distance = P_c.norm();  // temp 距离
+        P_c = ray_c * pyd.distance;
         // 考虑相机偏移
         P_c += cameraOffset;
+        //pyd.distance = P_c.norm();  
 
         // 考虑 IMU 数据
-        Eigen::Vector3d P_w = R.inverse() * P_c;
+        Eigen::Vector3d P_w = R * P_c;
+        pyd.distance = P_w.norm();  // 距离
 
         // 转换为 pyd
         pyd.pitch = std::asin(P_w.z() / pyd.distance);

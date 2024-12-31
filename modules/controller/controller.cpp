@@ -92,8 +92,9 @@ ControlResult Controller::control(const ParsedSerialData& parsedData)
         return ControlResult();
     flyTime = std::chrono::duration<double>(time);
     ControlResult result;
-    result.pitch_setpoint = pitch;
-    result.yaw_setpoint = yaw;
+    //rad to degree
+    result.pitch_setpoint = pitch * 180 / PI;
+    result.yaw_setpoint = yaw * 180 / PI;
     return result;
     //下面是火控逻辑
     // URGENT!!!!!!!!!!!!!!!!
