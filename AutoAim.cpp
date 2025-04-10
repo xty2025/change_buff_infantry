@@ -92,22 +92,28 @@ int main() {
     driver->runCameraThread();
 
     int receive_enemy_color = 0;
-    Eigen::Matrix3d cameraIntrinsicMatrix;
+    cv::Mat cameraIntrinsicMatrix = cv::Mat(3, 3, CV_64F);
+    cv::Mat distorationCoefficients = cv::Mat(1, 5, CV_64F);
     
     // Load camera intrinsic matrix from parameter file
     auto intrinsicArray = param["camera_intrinsic_matrix"].to<std::vector<std::vector<double>>>();
     for (int i = 0; i < 3; ++i)
         for (int j = 0; j < 3; ++j)
-            cameraIntrinsicMatrix(i, j) = intrinsicArray[i][j];
+            cameraIntrinsicMatrix.at<double>(i, j) = intrinsicArray[i][j];
     solver->setCameraIntrinsicMatrix(cameraIntrinsicMatrix);
     auto cameraOffset = Eigen::Vector3d(0.0, 0.0, 0.0);
     solver->setCameraOffset(cameraOffset);
     //Eigen::Vector5d distorationCoefficients = Eigen::Vector5d(-0.0658577209154935, 0.125641157995530, 0, 0, -0.0808951533858169);
     auto distorationCoefficientsArray = param["camera_distortion_matrix"].to<std::vector<double>>();
-    Eigen::Vector5d distorationCoefficients;
     for (int i = 0; i < 5; ++i)
-        distorationCoefficients(i) = distorationCoefficientsArray[i];
+        distorationCoefficients.at<double>(0, i) = distorationCoefficientsArray[i];
     solver->setDistorationCoefficients(distorationCoefficients);
+
+    auto cameraTransArray = param["camera_external_matrix"]["camera_trans"].to<std::vector<double>>();
+    Eigen::Vector3d cameraTrans(cameraTransArray[0], cameraTransArray[1], cameraTransArray[2]);
+    auto cameraPitchAngle = param["camera_external_matrix"]["camera_pitch_angle"].Double();
+    solver->setCameraExternalMatrix(cameraTrans, cameraPitchAngle);
+
 
     bool autoEnemy = (enemyTrans[param["enemy_color"].String()] == -1);
     if(!autoEnemy)
@@ -166,7 +172,7 @@ int main() {
         auto trackResults = tracker->getTrackResult(frame->timestamp, imu);
         for(auto& trackResult : trackResults)
         {
-            trackResult.location.pyd_imu = solver->camera2world(trackResult.armor, imu_data, false);
+            trackResult.location.pyd_imu = solver->solveArmorPoses(trackResult.armor,trackResult.car_id,imu_data);
             trackResult.location.imu = imu_data;
             CXYD coord = trackResult.location.cxy;
             cv::circle(frame->image, cv::Point(coord.cx, coord.cy), 15, cv::Scalar(0, 255, 0), -1);

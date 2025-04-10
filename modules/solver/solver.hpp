@@ -1,6 +1,8 @@
 #pragma once
 #include <Eigen/Core>
 #include <Eigen/Geometry>
+#include <sophus/se3.hpp>
+#include <cmath>
 #include <opencv2/opencv.hpp>
 #include "type.hpp"
 #include "driver/type.hpp"
@@ -15,11 +17,24 @@ namespace solver {
 class Solver : public BaseSolver
 {
 private:
-    Eigen::Matrix3d cameraIntrinsicMatrix;
-    Eigen::Vector3d cameraOffset;
-    Eigen::Vector5d distorationCoefficients;// k1,k2,p1,p2,k3
-	// static double X = 637.5, Y = 496.5;  // center of the image
-	// static double X1 = -3.78e-6, Y1 = 7.394e-4, X2 = 7.266e-4, Y2 = 3e-6;
+	cv::Mat cameraIntrinsicMatrix;
+    cv::Mat distorationCoefficients;// k1,k2,p1,p2,k3
+
+	Eigen::Vector3d cameraOffset;
+
+	Sophus::SE3<double> armor_to_camera;  
+	Sophus::SE3<double> camera_to_gimbal;
+	Sophus::SE3<double> gimbal_to_world;
+	
+	cv::Mat rvec; // 旋转向量 OpenCV
+	cv::Mat tvec; // 平移向量 OpenCV
+
+	double degree2rad = M_PI / 180;
+
+	void updateGimbalToWorld(ImuData imuData_deg);
+
+
+
 public:
 	static double X ,Y;  // center of the image
 	static double X1 ,Y1 ,X2 ,Y2;
@@ -32,7 +47,7 @@ public:
 		X2 = _X2;
 		Y2 = _Y2;
 	};
-    
+	PYD solveArmorPoses(ArmorXYV armor,int car_id,ImuData imuData_deg);
 	inline PYD XYZ2PYD(const XYZ& in) const override
 	{
 		double distance = sqrt(in.x*in.x + in.y*in.y + in.z*in.z);
@@ -83,10 +98,11 @@ public:
 	}
 	
 	PYD camera2world(const ArmorXYV& trackResult, const ImuData& imuData, bool isLarge);
-    
-	void setCameraIntrinsicMatrix(const Eigen::Matrix3d& cameraIntrinsicMatrix);
+
+	void setCameraIntrinsicMatrix(const cv::Mat& cameraIntrinsicMatrix);
     void setCameraOffset(const Eigen::Vector3d& cameraOffset);
-    void setDistorationCoefficients(const Eigen::Vector5d& distorationCoefficients);
+    void setDistorationCoefficients(const cv::Mat& distorationCoefficients);
+	void setCameraExternalMatrix(const Eigen::Vector3d cameraTrans, const double cameraPitchAngle);
 };
 std::shared_ptr<Solver> createSolver(double X, double Y, double X1, double Y1, double X2, double Y2);
 

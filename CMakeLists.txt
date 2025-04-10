@@ -6,6 +6,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
 # 设置输出目录
 message(STATUS "CMAKE_SOURCE_DIR: ${CMAKE_SOURCE_DIR}")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
+set(FMT_LIBRARIES fmt::fmt)
 message(STATUS "CMAKE_RUNTIME_OUTPUT_DIRECTORY: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 
 # 导入外部库
@@ -17,6 +18,8 @@ find_package(Boost CONFIG REQUIRED COMPONENTS system)
 find_package(spdlog CONFIG REQUIRED)
 find_package(OpenVINO REQUIRED)
 find_package(Ceres REQUIRED)
+find_package(Sophus REQUIRED)
+find_package(fmt REQUIRED)
 #target_link_libraries(third_party_libs INTERFACE ipopt)
 #target_link_libraries(third_party_libs INTERFACE cppad_lib)
 #target_link_libraries(third_party_libs INTERFACE /usr/local/lib/libcppad_lib.so)
@@ -29,6 +32,9 @@ target_link_libraries(third_party_libs INTERFACE Ceres::ceres)
 target_link_libraries(third_party_libs INTERFACE ${OpenCV_LIBS} Eigen3::Eigen)
 #target_include_directories(third_party_libs INTERFACE /usr/local/include/cppad)
 target_include_directories(third_party_libs INTERFACE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/utils/include ${CMAKE_SOURCE_DIR}/modules)
+
+
+add_definitions(-DGLOG_NO_ABBREVIATED_SEVERITIES)
 
 find_library(GXIAPI_LIB NAMES gxiapi)
 if(GXIAPI_LIB)
