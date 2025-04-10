@@ -1,139 +1,106 @@
-# AutoAim - Infantry
-version: 0.0.1 (unfinished)
-## 依赖
-- opencv
-- openvino
-- eigen
+# AutoAim
+version 0.0.2(unfinished)
+
+**可使用WSL2运行+调试功能**
+
+**AI GENERATED FILES**
+
+**To see human-written files, turn to file TODO.md**.
+
+## 系统架构
+系统由以下核心模块组成：
+
+- **Driver**: 硬件驱动模块，负责相机图像采集和串口通信
+- **Detector**: 目标检测模块，基于深度学习识别装甲板 + 车体
+- **Tracker**: 目标跟踪模块，确保目标持续跟踪
+- **Predictor**: 运动预测模块，Kalman滤波器预测目标运动轨迹
+- **Solver**: 姿态解算模块，解算相对位置关系
+- **Controller**: 控制决策模块，计算控制命令
+- **Replayer**: 数据回放模块，用于离线调试与分析
+
+## 依赖库
+- OpenCV 4.8.0+
+- Eigen3
+- Boost
 - spdlog
-- GXIAPI
-- cppad & ipopt (cpp自动微分优化库)
-## 编译
-```shell
+- OpenVINO opset>14.0
+- Ceres
+
+## 构建与安装
+### 环境准备
+OpenVINO的升级建议使用官网APT安装方法。
+### 编译
+```bash
 mkdir build && cd build
-cmake ..
-make
+cmake .. && make
 ```
+
+编译后的可执行文件将生成在 `bin` 目录下。
+
 ## 运行
-```shell
-bash utils/scripts/startGTK.sh # 还未迁移至仓库
-cd bin && sudo ./autoaim_infantry
+```bash
+cd bin
+./AutoAim
 ```
 
-## 代码结构
+## 配置说明
+系统配置文件位于 `config.json`，主要参数包括：
 
-```
-.
-├── modules/                # 核心模块
-│   ├── interfaceType.hpp   # 接口定义
-│   ├── modules.hpp         # 模块公共头文件
-│   ├── driver/             # 硬件驱动
-│   ├── detector/           # 目标检测
-│   ├── solver/             # 弹道解算
-│   ├── controller/         # 控制系统
-│   ├── tracker/            # 目标追踪
-│   └── predictor/          # 运动预测
-├── utils/                  # 工具组件
-│   ├── scripts/            # 脚本文件
-│   ├── include/            # 工具头文件
-│   └── models/             # 模型文件
-├── AutoAim.cpp             # 主程序
-├── CMakeLists.txt          # CMake配置文件
-└── config.json             # 配置文件
+- 相机参数
+- 检测器模型路径
+- 串口设置
+- 算法参数
+
+可以使用提供的 Web 配置工具进行图形化配置：
+```bash
+cd utils/scripts
+python server.py
 ```
 
-## 开发进度
-### 功能实现
-- [x] NUC上编译  
-- [x] NUC上运行  
-- [x] 对车控制  
-- [ ] 打弹  
-- [ ] 反陀螺  
-### 算法实现
-- [ ] 匹配和分配序号算法  
-- [x] 预测器初始化函数  
-- [ ] 火控逻辑编写  
-- [ ] JSON配置  
-- [ ] 合适的日志输出  
-- [ ] udpsender编写
-- [ ] 代码文档  
-- [ ] 棋盘格自动标定
-- [ ] cameraOffset自动计算
-### 模块检查
-- [x] driver  
-- [x] detector  
-- [ ] solver  
-- [ ] controller  
-- [ ] tracker  
-- [ ] predictor  
-### BUG Lists
-- [x] measure出现nan，怀疑是solvepnp/asin/atan2出问题（这些地方都未做检查） 罕见
-- [x] optimize error 10 较常见
-- [ ] optimize 中途出现nan （传入正常） 罕见
-- [x] 使用predict冲突 出现memory错误 常见
-- [ ] yaw -170 -> 170 应该柔和过渡 常见
-- [x] 运行时间长时段错误 较常见
-- [x] 莫名奇妙的卡顿/卡死
-- [ ] solver结果不准确
-- [ ] predictor亟需调参
+然后在浏览器中访问 http://127.0.0.1:8080 即可。
 
-## Feature
-### 工程特色
-- 模块间解耦  
-所有模块间无法通信，不可调用，只可通过回调函数的方式进行通信。提供给上级接口为纯虚函数接口，由下级模块提供实现（工厂模式）。  
-- 语法特性  
-使用lambda表达式，STL容器，智能指针等特性。**不使用模板😂。**
-- 伪代码
-```cpp
-// 初始化各个模块
-driver = new Driver()        // 相机和串口驱动
-controller = new Controller()// 控制系统  
-detector = new Detector()    // 目标检测
-tracker = new Tracker()      // 目标跟踪
-solver = new Solver()        // 弹道解算
-predictor = new Predictor()  // 运动预测
+## 工具库
 
-// 配置硬件
-...
+系统包含多个实用工具：
 
-// 注册回调函数
-controller.registPredictFunc(predictor.predictFunc)
-controller.registSolveFunc(solver.camera2worldFunc)
-driver.registReadCallback(callback=[](serialData) {
-    result = controller.control(serialData)
-    driver.sendSerial(result)
-})
+- **Log**: 日志记录系统，基于 spdlog
+- **VideoStreamer**: 视频流处理与网络传输
+- **Udpsend**: UDP 数据发送工具
+- **Param**: JSON 配置参数管理
+- **TimeStamp**: 时间戳处理
+- **Location**: 位置信息与坐标转换
+- **Recorder**: 视频录制与回放
 
-// 启动线程
-driver.run()
+## 开发指南
 
-// 主循环
-while(true) {
-    if(!driver.hasNewFrame())
-        continue
-        
-    frame = driver.getLatestFrame()
-    imu = driver.getMatchedIMU(frame.timestamp)
-    
-    if(!lastDetected || timeout)
-        tracker.merge(detector.detect(frame))
-        
-    if(lastDetected) {
-        predictions = predictor.predict(deltaTime)
-        projects = solver.world2camera(predictions, imu)
-        rois = tracker.calcROI(projects)
-        
-        for(roi : rois)
-            tracker.merge(detector.detect(frame, roi))
-            
-        tracker.update(projects)
-    } else {
-        tracker.update()
-    }
-    
-    predictor.update(solver.camera2world(tracker.getResult()))
-    lastDetected = tracker.isDetected()
-}
+### 代码结构
+```
+AutoAim/
+├── modules/           # 核心功能模块
+│   ├── driver/        # 驱动模块
+│   ├── detector/      # 检测模块
+│   ├── tracker/       # 跟踪模块
+│   ├── predictor/     # 预测模块
+│   ├── solver/        # 解算模块
+│   ├── controller/    # 控制模块
+│   └── replayer/      # 回放模块
+├── utils/             # 工具库
+│   └── include/       # 工具头文件
+├── bin/               # 编译输出目录
+└── CMakeLists.txt     # CMake 配置文件
 ```
 
-### 算法特色
-(待补充)
+### 模块扩展
+要扩展特定模块功能，可以参考每个模块下的类型定义和接口说明。每个模块都设计了清晰的接口，便于功能扩展。
+
+## 调试工具
+
+- **日志调试**: 使用 `Log` 模块记录调试信息
+- **参数调整**: 通过 Web 界面实时调整参数 + 查看视频
+- **录制回放**: 使用 Recorder 工具录制数据，用 Replayer 模块回放分析
+
+## 注意事项
+- 确保相机和串口设备权限正确
+
+### TODO
+查看 `TODO.md` 文件，了解当前开发进度，问题，待办事项。

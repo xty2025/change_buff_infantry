@@ -1,53 +1,88 @@
 #include "detector.hpp"
+#include "Log/log.hpp"
 
-auto modules::createDetector(const std::string &model_path) -> std::unique_ptr<modules::Detector>
+auto detector::createDetector(const std::string &armor_model_path, const std::string &car_model_path, bool allowGray) -> std::unique_ptr<Detector>
 {
-    return std::make_unique<detector::Detector>(model_path);
+    return std::make_unique<detector::Detector>(armor_model_path, car_model_path, allowGray);
 }
+
 namespace detector
 {
-    std::vector<Detection> Detector::detect(const cv::Mat &image, const cv::Rect &roi)
-    {
-        BBoxes detection;
-        bool use_roi = false;
-        if(roi.size() == cv::Size(0,0))
-        {
-            use_roi = false;
-            detection = (*armor_one_stage_inferer)(image);
-        }
-        else
-        {
-            use_roi = true;
-            cv::Mat roi_image = image(roi);
-            detection = (*armor_one_stage_inferer)(roi_image);
-        }
-        //according to roi, transform the pos in the original image
+    std::pair<std::vector<Detection>, std::vector<CarDetection>> Detector::detect(const cv::Mat &image, const cv::Rect &roi) {
+        // 使用异步方式启动ArmorOneStage检测
+        auto armor_future = std::async(std::launch::async, [&]() {
+            bool use_roi = (roi.size() != cv::Size(0,0));
+            return (*armor_one_stage_inferer)(use_roi ? image(roi) : image);
+        });
+        
+        // 使用异步方式启动车辆检测
+        auto car_future = std::async(std::launch::async, [&]() {
+            return yolo_detector->infer(image);
+        });
+        
+        // 等待ArmorOneStage检测完成并处理结果
+        BBoxes detection = armor_future.get();
         std::vector<Detection> detections;
-        for(auto &det : detection)
-        {
-            Detection detection;
-            if(use_roi)
-            {
-                detection.bounding_rect = cv::Rect2f(det.rect.x + roi.x, det.rect.y + roi.y, det.rect.width, det.rect.height);
-                detection.center = cv::Point2f(det.center.x + roi.x, det.center.y + roi.y);
-                for(auto &corner : det.corners)
-                {
-                    detection.corners.push_back(cv::Point2f(corner.x + roi.x, corner.y + roi.y));
-                }
+        detections.reserve(detection.size());
+        
+        const int offset_x = (roi.size() != cv::Size(0,0)) ? roi.x : 0;
+        const int offset_y = (roi.size() != cv::Size(0,0)) ? roi.y : 0;
+        
+        for(auto &det : detection) {
+            detections.emplace_back();
+            auto &result = detections.back();
+            
+            // 设置边界框和中心
+            result.bounding_rect = cv::Rect2f(
+                det.rect.x + offset_x,
+                det.rect.y + offset_y,
+                det.rect.width,
+                det.rect.height
+            );
+            result.center = cv::Point2f(
+                det.center.x + offset_x,
+                det.center.y + offset_y
+            );
+            
+            // 高效处理角点
+            result.corners.reserve(4);
+            for(auto &corner : det.corners) {
+                result.corners.push_back(cv::Point2f(
+                    corner.x + offset_x,
+                    corner.y + offset_y
+                ));
             }
-            else
-            {
-                detection.bounding_rect = cv::Rect2f(det.rect.x, det.rect.y, det.rect.width, det.rect.height);
-                detection.center = cv::Point2f(det.center.x, det.center.y);
-                for(auto &corner : det.corners)
-                {
-                    detection.corners.push_back(cv::Point2f(corner.x, corner.y));
-                }
-            }
-            detection.tag_id = det.tag_id;
-            detection.score = det.confidence;
-            detections.push_back(detection);
+            
+            // 复制其他属性
+            result.tag_id = det.tag_id;
+            result.score = det.confidence;
+            result.isGray = det.color_id/2 == 2;
         }
-        return detections;
+        
+        // 等待车辆检测完成并处理结果
+        std::vector<YoloDetection> yolo_detections = car_future.get();
+        std::vector<CarDetection> car_detections;
+        car_detections.reserve(yolo_detections.size());
+        
+        for(auto &det : yolo_detections) {
+            car_detections.emplace_back();
+            auto &car_detection = car_detections.back();
+            
+            car_detection.bounding_rect = cv::Rect2f(det.rect);
+            car_detection.center = det.center;
+            car_detection.tag_id = det.class_id;
+            car_detection.score = det.confidence;
+            INFO("yolo car detection: {} {} {} {}", det.rect.x, det.rect.y, det.rect.width, det.rect.height);
+            INFO("yolo confidence: {}", det.confidence);
+
+            // 在image上绘制检测框
+            cv::rectangle(image, det.rect, cv::Scalar(0, 255, 0), 2);
+            std::string label = "Class: " + std::to_string(det.class_id) + " " + std::to_string(det.confidence).substr(0, 4);
+            int baseline = 0;
+            cv::Size label_size = cv::getTextSize(label, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseline);
+        }
+        INFO("find {} yolo detections", car_detections.size());
+        INFO("find {} armor detections", detections.size());
+        return {detections, car_detections};
     }
 }

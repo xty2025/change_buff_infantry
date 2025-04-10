@@ -1,6 +1,6 @@
 #pragma once
 #include <iostream>
-#include "interfaceType.hpp"
+#include "type.hpp"
 #include "openvino/openvino.hpp"
 #include "NumberClassifier.hpp"
 #include <Eigen/Eigen>
@@ -11,12 +11,12 @@ namespace detector
     class ArmorOneStage
     {
     public:
-        explicit ArmorOneStage(const std::string &model_file);
+        explicit ArmorOneStage(const std::string &model_file,bool allowGray = true);
 
         ~ArmorOneStage();
 
         BBoxes operator()(const cv::Mat &img);
-        cv::Mat getProposalPic();
+        //cv::Mat getProposalPic();
         void setColorFlag(int flag_)
         {
             if(flag_ == 0) // enemy_red
@@ -42,10 +42,9 @@ namespace detector
         Eigen::Matrix<float, 3, 3> transfrom_matrix;
 
         void initModel(const std::string &model_file);
-        cv::Mat drawProposals;
-
         //blue: 0, red: 1, gray: 2, purple: 3
         int color_flag = -1;
+        bool allowGray = true;
     };
 
     struct GridAndStride

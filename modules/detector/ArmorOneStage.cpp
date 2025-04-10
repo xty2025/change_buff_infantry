@@ -1,6 +1,8 @@
 #include "ArmorOneStage.hpp"
 #include <Eigen/Core>
 #include "opencv2/opencv.hpp"
+#include "TimeStamp/TimeStamp.hpp"
+#include "Log/log.hpp"
 
 namespace detector
 {
@@ -15,7 +17,8 @@ namespace detector
     static constexpr float MERGE_CONF_ERROR = 0.15;
     static constexpr float MERGE_MIN_IOU = 0.9;
 
-    ArmorOneStage::ArmorOneStage(const std::string &model_file)
+    ArmorOneStage::ArmorOneStage(const std::string &model_file, bool allowGray)
+        : allowGray(allowGray)
     {
         initModel(model_file);
         number_classifier = std::make_unique<NumberClassifier>("svm");
@@ -37,7 +40,10 @@ namespace detector
         compiled_model = core.compile_model(
             model,
             "CPU",
-            ov::hint::performance_mode(ov::hint::PerformanceMode::LATENCY)
+            ov::hint::performance_mode(ov::hint::PerformanceMode::LATENCY),
+            ov::inference_num_threads(4)//,
+            //ov::hint::enable_cpu_pinning(true),
+            //ov::hint::enable_hyper_threading(true)
         );
         infer_request = compiled_model.create_infer_request();
     }
@@ -96,7 +102,7 @@ namespace detector
 
     static void generateYoloxProposals(std::vector<GridAndStride> grid_strides, const float *feat_ptr,
                                        Eigen::Matrix<float, 3, 3> &transform_matrix, float prob_threshold,
-                                       BBoxes &bboxes,int& color_flag)
+                                       BBoxes &bboxes,int& color_flag, bool& allowGray)
     {
         const int num_anchors = grid_strides.size();
         // Travel all the anchors
@@ -147,7 +153,7 @@ namespace detector
                 bbox.color_id = box_color;
                 bbox.confidence = box_prob;
                 bbox.area = bbox.rect.area();
-                if(box_color/2 == color_flag)
+                if(box_color/2 == color_flag )//|| (allowGray && (box_color/2 == 2)))
                 {
                     bboxes.push_back(bbox);
                 }
@@ -243,14 +249,14 @@ namespace detector
     }
 
 
-    BBoxes decodeOutputs(const float *prob, BBoxes &objects, Eigen::Matrix<float, 3, 3> &transform_matrix, int& color_flag)
+    BBoxes decodeOutputs(const float *prob, BBoxes &objects, Eigen::Matrix<float, 3, 3> &transform_matrix, int& color_flag, bool& allowGray)
     {
         BBoxes proposals;
         std::vector<int> strides = {8, 16, 32};
         std::vector<GridAndStride> grid_strides;
 
         generate_grids_and_stride(INPUT_W, INPUT_H, strides, grid_strides);
-        generateYoloxProposals(grid_strides, prob, transform_matrix, BBOX_CONF_THRESH, proposals, color_flag);
+        generateYoloxProposals(grid_strides, prob, transform_matrix, BBOX_CONF_THRESH, proposals, color_flag, allowGray);
         qsort_descent_inplace(proposals);
         
         if (proposals.size() >= TOPK)
@@ -267,13 +273,9 @@ namespace detector
         return proposals;
     }
 
-    cv::Mat ArmorOneStage::getProposalPic()
-    {
-        return this->drawProposals;
-    }
-
     BBoxes ArmorOneStage::operator()(const cv::Mat &img)
     {
+        Time::TimeStamp time_stamp = Time::TimeStamp::now();
         cv::Mat pre_img = scaledResize(img, transfrom_matrix);
         cv::Mat pre;
         cv::Mat pre_split[3];
@@ -294,14 +296,7 @@ namespace detector
         float *output = output_tensor.data<float_t>();
 
         BBoxes bboxes;
-        BBoxes proposals = decodeOutputs(output, bboxes, transfrom_matrix, this->color_flag);
-        cv::Mat temp = img.clone();
-        for(auto p:proposals)
-        {
-            cv::rectangle(temp,p.rect,cv::Scalar(0,0,255));
-        }
-
-        this->drawProposals = temp;
+        BBoxes proposals = decodeOutputs(output, bboxes, transfrom_matrix, this->color_flag, this->allowGray);
 	    BBoxes bboxes_temp;
         for (auto bbox = bboxes.begin(); bbox != bboxes.end(); ++bbox)
         {
@@ -340,20 +335,21 @@ namespace detector
             // std::cout<<"r"<<result.first<<std::endl;
             }
         }
+        INFO("Armor Detect cost time: {}ms", (Time::TimeStamp::now() - time_stamp).toSeconds() * 1000);
         // //debug:
-        for (auto bbox = bboxes_temp.begin(); bbox != bboxes_temp.end(); ++bbox)
-        {
-            //use corner
-            cv::line(temp, bbox->corners[0], bbox->corners[1], cv::Scalar(0, 255, 0), 2);
-            cv::line(temp, bbox->corners[1], bbox->corners[2], cv::Scalar(0, 255, 0), 2);
-            cv::line(temp, bbox->corners[2], bbox->corners[3], cv::Scalar(0, 255, 0), 2);
-            cv::line(temp, bbox->corners[3], bbox->corners[0], cv::Scalar(0, 255, 0), 2);
-            //use center
-            cv::circle(temp, bbox->center, 3, cv::Scalar(0, 255, 0), -1);
-        }
-        cv::namedWindow("result",cv::WINDOW_NORMAL);
-        cv::imshow("result",temp);
-        cv::waitKey(1);
+        //for (auto bbox = bboxes_temp.begin(); bbox != bboxes_temp.end(); ++bbox)
+        //{
+        //    //use corner
+        //    cv::line(temp, bbox->corners[0], bbox->corners[1], cv::Scalar(0, 255, 0), 2);
+        //    cv::line(temp, bbox->corners[1], bbox->corners[2], cv::Scalar(0, 255, 0), 2);
+        //    cv::line(temp, bbox->corners[2], bbox->corners[3], cv::Scalar(0, 255, 0), 2);
+        //    cv::line(temp, bbox->corners[3], bbox->corners[0], cv::Scalar(0, 255, 0), 2);
+        //    //use center
+        //    cv::circle(temp, bbox->center, 3, cv::Scalar(0, 255, 0), -1);
+        //}
+        //cv::namedWindow("result",cv::WINDOW_NORMAL);
+        //cv::imshow("result",temp);
+        //cv::waitKey(1);
 
 
         return bboxes_temp;

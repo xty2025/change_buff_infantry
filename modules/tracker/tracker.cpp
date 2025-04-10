@@ -1,11 +1,14 @@
 #include "tracker.hpp"
+#include "TrackerMatcher.hpp"
+#include "Log/log.hpp"
 
-auto modules::createTracker() -> std::unique_ptr<modules::Tracker> {
+auto tracker::createTracker() -> std::unique_ptr<Tracker> {
     return std::make_unique<tracker::Tracker>();
 }
 
 namespace tracker {
 
+// This func will regard the last one as the final result.
 void Tracker::merge(const Detections& detections, double threshold) 
 {
     //clear method will put into GetTrackResult method
@@ -30,13 +33,27 @@ void Tracker::merge(const Detections& detections, double threshold)
                 }
                 return avg_dist/4 < threshold;
             });
-        
+        auto it2 = std::remove_if(armors_gray.begin(), armors_gray.end(), 
+            [&](const auto& existing_armor) {
+                float avg_dist = 0;
+                for(int i = 0; i < 4; i++) {
+                    avg_dist += dist(existing_armor.first[i], new_armor[i]);
+                }
+                return avg_dist/4 < threshold;
+            });
         armors.erase(it, armors.end());
-        armors.push_back(std::make_pair(new_armor, detection.tag_id));
+        armors_gray.erase(it2, armors_gray.end());
+        if(detection.isGray)
+            armors_gray.push_back(std::make_pair(new_armor, detection.tag_id));
+        else
+        {
+            armors.push_back(std::make_pair(new_armor, detection.tag_id));
+            dead[detection.tag_id] = 0;
+        }
     }
 }
 
-std::vector<cv::Rect2i> Tracker::calcROI(const XYVs& projects, int width, int height, int camera_width, int camera_height) 
+std::vector<cv::Rect2i> Tracker::calcROI(const std::vector<XYV>& projects, int width, int height, int camera_width, int camera_height) 
 {
     std::vector<cv::Rect2i> rois;
     std::vector<bool> used(projects.size(), false);
@@ -69,80 +86,122 @@ std::vector<cv::Rect2i> Tracker::calcROI(const XYVs& projects, int width, int he
     return rois;
 }
 
-//ole_prediction: (xyv, car_id, armor_id)
-double max_match_dist = 200;
-TrackResults Tracker::getTrackResult(const std::vector<std::tuple<XYV,int,int>>& old_prediction) {
+
+std::pair<double, double> calculateRotatedRect(const ArmorXYV& points_) {
+    // 检查输入点数是否为4
+    if (points_.size() != 4) {
+        return {0.0, 1.0}; // 返回默认值
+    }
+    std::vector<cv::Point2f> points;
+    for (const auto& point : points_) {
+        points.push_back(cv::Point2f(point.x, point.y));
+    }
+    // 使用 OpenCV 的 minAreaRect 函数计算外接旋转矩形
+    cv::RotatedRect rotatedRect = cv::minAreaRect(points);
+    
+    // 获取矩形的角度（OpenCV 中角度范围为 [-90, 0)）
+    double angle = rotatedRect.angle;
+    
+    // 将角度转换为弧度制，并调整到 [0, π) 范围
+    double theta = angle * CV_PI / 180.0;
+    if (theta < 0) {
+        theta += CV_PI; // 转换到 [0, π) 范围
+    }
+    
+    // 获取矩形的宽和高
+    double width = rotatedRect.size.width;
+    double height = rotatedRect.size.height;
+    
+    if(width < height) {
+        theta += CV_PI / 2;
+        if(theta >= CV_PI) {
+            theta -= CV_PI;
+        }
+    }
+    double aspectRatio = width / height;
+    
+    return {theta, aspectRatio};
+}
+
+
+
+std::map<int, Matcher> matchers;
+
+// 此算法依赖carid的准确性
+//old_prediction: (XYV, car_id, armor_id)
+TrackResults Tracker::getTrackResult(Time::TimeStamp time, ImuData imu) 
+{
+    for(const auto& armor : armors_gray) {
+        if(dead.find(armor.second) == dead.end()) {
+            dead[armor.second] = maxDeadFrames + 1;
+        }
+    }
+    for(auto& [car_id, dead_frames] : dead) {
+        if(dead_frames <= maxDeadFrames) {
+            dead_frames++;
+        }
+    }
+    // A very strict condition for gray armor
+    // Just for avoid situation: red_4 sentry & blue_4 sentry
+    // are all hit and turn to gray
+    // only satisfy conditions 1. dead <= maxDeadFrames
+    // 2. deadArmor num == 1 
+    // 3. no armor in armors
+    // 's gray armor will be added to armors
+    std::map<int, std::vector<std::pair<ArmorXYV, int>>> gray_armors_by_car;  // (car_id, [(armor, armor_id)])
+
+    // 统计灰色装甲板
+    for (const auto& armor : armors_gray) {
+        gray_armors_by_car[armor.second].push_back(armor);
+    }
+    for (const auto& armor : armors) {
+        gray_armors_by_car[armor.second].clear();  
+    }
+    for (auto& [car_id, gray_armors] : gray_armors_by_car) {
+        if (gray_armors.size() == 1 && dead[car_id] <= maxDeadFrames) {
+            armors.push_back(gray_armors[0]);
+        }
+    }
+
+
+
     TrackResults results;
     if(armors.empty()) return results;
 
-    // 计算距离矩阵
-    std::vector<std::vector<double>> cost_matrix(armors.size(), 
-        std::vector<double>(old_prediction.size(), std::numeric_limits<double>::max()));
-    
-    for(size_t i = 0; i < armors.size(); i++) {
-        // 计算装甲板中心点
-        XYV center = {0, 0};
-        for(const auto& point : armors[i].first) {
-            center.x += point.x;
-            center.y += point.y;
-        }
-        center.x /= 4;
-        center.y /= 4;
 
-        for(size_t j = 0; j < old_prediction.size(); j++) {
-            const auto& [pred_xyv, car_id, armor_id] = old_prediction[j];
-            double dist = std::hypot(center.x - pred_xyv.x, 
-                                   center.y - pred_xyv.y);
-            if(dist < max_match_dist) { // 设置最大匹配距离阈值
-                cost_matrix[i][j] = dist;
-            }
-        }
+    std::map<int,std::vector<std::pair<Point2f,const ArmorXYV*>>> params;//(car_id, centers)
+    for(const auto& armor : armors) {
+        location::Location center_location;
+        center_location.cxy = {(armor.first[0].x + armor.first[1].x + armor.first[2].x + armor.first[3].x) / 4,
+            (armor.first[0].y + armor.first[1].y + armor.first[2].y + armor.first[3].y) / 4};
+        //center_location.imu = imu;
+        //CXYD coord = center_location.cxy_imu;
+        CXYD coord = center_location.getImuCXY(imu);
+        cv::Point2f center(coord.cx/10.0, coord.cy/10.0);
+        params[armor.second].push_back(std::make_pair(center, &armor.first));
     }
 
-    // 匈牙利算法求解
-    std::vector<int> assignment(armors.size(), -1);
-    for(size_t i = 0; i < armors.size(); i++) {
-        double min_dist = std::numeric_limits<double>::max();
-        int best_match = -1;
-        
-        for(size_t j = 0; j < old_prediction.size(); j++) {
-            if(cost_matrix[i][j] < min_dist) {
-                bool is_used = false;
-                for(size_t k = 0; k < i; k++) {
-                    if(assignment[k] == j) {
-                        is_used = true;
-                        break;
-                    }
-                }
-                if(!is_used) {
-                    min_dist = cost_matrix[i][j];
-                    best_match = j;
-                }
-            }
+    for(auto& [car_id, param] : params) {
+        if(matchers.find(car_id) == matchers.end()) {
+            matchers.emplace(car_id, Matcher());
         }
-        
-        assignment[i] = best_match;
-    }
-
-    // 生成结果
-    for(size_t i = 0; i < armors.size(); i++) {
-        TrackResult result;
-        result.armor = armors[i].first;
-        
-        if(assignment[i] != -1) {
-            const auto& [_, car_id, armor_id] = old_prediction[assignment[i]];
-            result.car_id = car_id;
-            result.armor_id = armor_id;
-        } else {
-            // 对于未匹配的装甲板，使用默认tag_id
-            result.car_id = armors[i].second / 4;  // 假设每车4个装甲板
-            result.armor_id = armors[i].second % 4;
+        auto result = matchers[car_id].track(param, time, timeRatio);
+        if(result.size() != param.size()) {
+            ERROR("TrackerMatcher error: result size not equal to center size");
+            continue;
         }
-        
-        results.push_back(result);
+        for(auto& [id, armor_ptr] : result) {
+            TrackResult track_result;
+            track_result.armor = *armor_ptr;
+            track_result.armor_id = id;
+            //INFO("Car {} Armor {} at ({}, {})", car_id, id, track_result.extra_center.x, track_result.extra_center.y);
+            track_result.car_id = car_id;
+            results.push_back(track_result);
+        }
     }
 
     armors.clear();  // 清空当前帧的装甲板
+    armors_gray.clear();
     return results;
 }
 

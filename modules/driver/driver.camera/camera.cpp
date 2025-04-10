@@ -13,12 +13,12 @@ std::map<CameraConfig::LightSource, GX_AWB_LAMP_HOUSE_ENTRY> light_source_map = 
     {CameraConfig::LightSource::GX_AWB_LAMP_HOUSE_D75, GX_AWB_LAMP_HOUSE_D75}
 };
 
-auto driver::createCamera() -> std::unique_ptr<driver::Camera> {
+auto camera::createCamera() -> std::unique_ptr<Camera> {
     return std::make_unique<camera::Camera>();
 }
 
 
-void Camera::setCameraConfig(CameraConfig config){
+void Camera::setCameraConfig(camera::CameraConfig config){
     constexpr auto Width = 1280;
     constexpr auto Height = 1024;
 

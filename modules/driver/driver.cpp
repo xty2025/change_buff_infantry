@@ -2,7 +2,7 @@
 using namespace driver;
 
 
-auto modules::createDriver() -> std::unique_ptr<modules::Driver> 
+auto driver::createDriver() -> std::unique_ptr<Driver> 
 { 
     return std::make_unique<driver::Driver>(createSerial(), createCamera()); 
 }
@@ -57,4 +57,6 @@ void Driver::clearSerialData()
     this->serial->clearSerialData();
 }
 
-
+RawSerialWriteData::RawSerialWriteData(const ControlResult& x)
+: start_flag('!'), detect_number(static_cast<int>(x.valid)), shoot_flag(x.shoot_flag), 
+            pitch_setpoint(x.pitch_setpoint), yaw_setpoint(x.yaw_setpoint) {}

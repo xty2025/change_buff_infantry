@@ -1,7 +1,5 @@
-// CICECOO 24.8.5
-
 #include <cstdint>
-#include "interfaceType.hpp"
+#include "serial.hpp"
 
 namespace serial {
     void addCRC16(RawSerialWriteData *msg);

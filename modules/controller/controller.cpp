@@ -1,28 +1,72 @@
 #include "controller.hpp"
 #include <cmath>
 #include <Log/log.hpp>
+#include <Param/param.hpp>
+#include <Udpsend/udpsend.hpp>
 
-auto modules::createController() -> std::unique_ptr<modules::Controller>
+auto controller::createController() -> std::shared_ptr<controller::Controller>
 {
     return std::make_unique<controller::Controller>();
 }
 
 using namespace controller;
 using namespace aimlog;
+using param::Param;
 
 void Controller::registPredictFunc(std::function<Predictions(Time::TimeStamp)> predictFunc)
 {
     this->predictFunc = predictFunc;
 }
+const int camera_halfwidth=640;
+const int camera_halfheight=512;
 
 ControlResult Controller::control(const ParsedSerialData& parsedData)
 {
+Param param("../config.json");
+
+    param = param[param["car_name"].String()];
+    if(parsedData.aim_request == 1)
+        aim_want ++;
+    else
+        aim_want --;
+    if(aim_want < - waitFrame)
+    {
+        aim_want = - waitFrame;
+    }
+    if(aim_want > waitFrame)
+    {
+        aim_want = waitFrame;
+    }
+    if(old_aim_want < 0 && aim_want >= 0)
+    {
+        aim_new = true;
+    }
+    else
+    {
+        aim_new = false;
+    }
+    old_aim_want = aim_want;
+
+    INFO("now yaw:{},now pitch:{}",parsedData.yaw_now,parsedData.pitch_now);
+    ControlResult result;
+    result.yaw_setpoint=parsedData.yaw_now;
+    result.pitch_setpoint=parsedData.pitch_now;
+    result.valid = false;
+
+    if(aim_new)
+        aim_armor_id = std::make_pair(-1, -1);
+    else if(param["mouse_require"].Bool() && (aim_want < 0))
+    {
+        WARN("MOUSE REQUIRE");
+        return result;
+    }
+
     Time::TimeStamp now;
     Predictions predictions_for_time = predictFunc(now + flyTime);
     if(predictions_for_time.empty())
     {
         WARN("No prediction");
-        return ControlResult();
+        return result;
     }
     bool is_valid_car_id = std::any_of(predictions_for_time.begin(), predictions_for_time.end(), 
                                   [&](const auto& prediction) { return prediction.id == aim_armor_id.first; });
@@ -30,19 +74,39 @@ ControlResult Controller::control(const ParsedSerialData& parsedData)
     {
         WARN("Invalid car id");
         //重新选择一个距离最近的
-        auto min_distance = std::numeric_limits<double>::max();
+        auto min_camdistance = std::numeric_limits<double>::max();
+        double distance = -1;
         for(const auto& prediction : predictions_for_time)
         {
-            double distance = sqrt(prediction.x * prediction.x + prediction.y * prediction.y);
-            if(distance < min_distance)
+//            //double distance = sqrt(prediction.x * prediction.x + prediction.y * prediction.y);
+//            double distance = prediction.dist;
+//            if(distance < min_distance)
+//            {
+//                min_distance = distance;
+//                aim_armor_id.first = prediction.id;
+//            }
+            //find in armos
+            for(const auto& armor:prediction.armors)
             {
-                min_distance = distance;
-                aim_armor_id.first = prediction.id;
+                if(armor.status == Armor::AVAILABLE)
+                {
+                    double camdistance = (armor.cam_x - camera_halfwidth) * (armor.cam_x - camera_halfwidth) + (armor.cam_y - camera_halfheight) * (armor.cam_y - camera_halfheight);
+                    if(camdistance < min_camdistance)
+                    {
+                        distance = armor.gen_cam_dist;
+                        min_camdistance = camdistance;
+                        aim_armor_id.first = prediction.id;
+                        aim_armor_id.second = armor.id;
+                    }
+                }
             }
         }
         //需要重新计算flyTime
-        flyTime = std::chrono::duration<double>(min_distance / bullet_speed);//粗略计算
-        predictions_for_time = predictFunc(now + flyTime);
+        if(distance > 0.0)
+        {
+            flyTime = std::chrono::duration<double>(distance / bullet_speed);//粗略计算
+            predictions_for_time = predictFunc(now + flyTime);
+        }
     }
     
     Prediction aim_prediction;
@@ -57,52 +121,144 @@ ControlResult Controller::control(const ParsedSerialData& parsedData)
     if(!is_valid_car_id)
     {
         WARN("New car id invalid");
-        return ControlResult();
+        return result;
     }
-    bool is_valid_armor_id = std::any_of(aim_prediction.armors.begin(), aim_prediction.armors.end(), 
-                            [&](const auto& armor) { return armor.id == aim_armor_id.second; });
-    if(!is_valid_armor_id)
+
+    double high_offset = 0.0;
+    high_offset = param["high_offset"].Double();
+            result.shoot_flag = false;
+    if(aim_prediction.status == Prediction::UNKNOW)
     {
-        WARN("Invalid armor id");
-        //重新选择一个距离最近的
-        auto min_distance = std::numeric_limits<double>::max();
-        for(const auto& armor : aim_prediction.armors)
+        WARN("No armor");
+        return result;
+    }
+    else if (aim_prediction.status == Prediction::ROTATE)
+    {
+        double pitch = 0.0;
+        double yaw = 0.0;
+        double time = 0.0;
+        if(!calcPitchYaw(pitch, yaw, time, aim_prediction.x, aim_prediction.y, aim_prediction.target_z + high_offset))
+            return result;
+        flyTime = std::chrono::duration<double>(time);
+        //rad to degree
+        result.pitch_setpoint = pitch * 180 / PI + param["pitch_offset"].Double();
+        result.yaw_setpoint = yaw * 180 / PI + param["yaw_offset"].Double();
+        result.yaw_setpoint = parsedData.yaw_now + std::remainder(result.yaw_setpoint - parsedData.yaw_now, 360.0);
+        result.valid = true;
+        INFO("aim_pitch:{},aim_yaw:{}",result.pitch_setpoint,result.yaw_setpoint);
+        double tol_pitch = param["shoot_pitch_tol"].Double();
+        double tol_yaw = param["shoot_yaw_tol"].Double();
+
+        if((std::abs(result.pitch_setpoint - parsedData.pitch_now) > tol_pitch) ||( std::abs(result.yaw_setpoint - parsedData.yaw_now) > tol_yaw))
         {
-            if(armor.status == Armor::AVAILABLE)
+            WARN("pitch or yaw not in tolerance");
+        }
+        else
+        {
+            double r_tol_pitch = param["rotate_shoot_pitch_tol"].Double();
+            double r_tol_yaw = param["rotate_shoot_yaw_tol"].Double();
+            //judge whether to shoot
+            //check all armors which are available
+            //and if one available and p&y in tolerance, then shoot
+            for(const auto& armor : aim_prediction.armors)
             {
-                double distance = sqrt(armor.x * armor.x + armor.y * armor.y);
-                if(distance < min_distance)
+                INFO("statusnew:{}",(int)armor.status);
+                if(armor.status == Armor::AVAILABLE)
                 {
-                    min_distance = distance;
-                    aim_armor_id.second = armor.id;
+                    double pitch = 0.0;
+                    double yaw = 0.0;
+                    double time = 0.0;
+                    //exit(-1);
+                    if(!calcPitchYaw(pitch, yaw, time, armor.x, armor.y, armor.z + high_offset))
+                        continue;
+                    //rad to degree
+                    pitch = pitch * 180 / PI + param["pitch_offset"].Double();
+                    yaw = yaw * 180 / PI + param["yaw_offset"].Double();
+                    yaw = parsedData.yaw_now + std::remainder(yaw - parsedData.yaw_now, 360.0);
+                    INFO(" asbyyy:{},yyy:{}",yaw,parsedData.yaw_now);
+                    //exit(-1);
+                    if((std::abs(pitch - parsedData.pitch_now) < r_tol_pitch) &&( std::abs(yaw - parsedData.yaw_now) < r_tol_yaw))
+                    {
+                        result.shoot_flag = true;
+                        break;
+                    }
                 }
             }
-        }
-        if(min_distance == std::numeric_limits<double>::max())
-        {
-            WARN("No available armor");
-            return ControlResult();
+            if(!result.shoot_flag)ERROR("cancel shoot");
+            else INFO("not cancel");
+            INFO("a");
         }
     }
-    //计算pitch和yaw
-    double pitch = 0.0;
-    double yaw = 0.0;
-    double time = 0.0;
-    if(!calcPitchYaw(pitch, yaw, time, aim_prediction.armors[aim_armor_id.second].x, aim_prediction.armors[aim_armor_id.second].y, aim_prediction.armors[aim_armor_id.second].z))
-        return ControlResult();
-    flyTime = std::chrono::duration<double>(time);
-    ControlResult result;
-    //rad to degree
-    result.pitch_setpoint = pitch * 180 / PI;
-    result.yaw_setpoint = yaw * 180 / PI;
+    else
+    {
+        bool is_valid_armor_id = std::any_of(aim_prediction.armors.begin(), aim_prediction.armors.end(), 
+        [&](const auto& armor) { return (armor.id == aim_armor_id.second) && (armor.status == Armor::AVAILABLE); });
+        if(!is_valid_armor_id)
+        {
+            WARN("Invalid armor id");
+            //重新选择一个距离最近的
+            auto min_camdistance = std::numeric_limits<double>::max();
+            for(const auto& armor : aim_prediction.armors)
+            {
+                if(armor.status == Armor::AVAILABLE)
+                {
+                    //double distance = sqrt(armor.x * armor.x + armor.y * armor.y);
+                    double camdistance = (armor.cam_x - camera_halfwidth) * (armor.cam_x - camera_halfwidth) + (armor.cam_y - camera_halfheight) * (armor.cam_y - camera_halfheight);
+                    if(camdistance < min_camdistance)
+                    {
+                        min_camdistance = camdistance;
+                        aim_armor_id.second = armor.id;
+                    }
+                }
+            }
+            if(min_camdistance == std::numeric_limits<double>::max())
+            {
+                WARN("No available armor");
+                return result;
+            }
+        }
+        //计算pitch和yaw
+        double pitch = 0.0;
+        double yaw = 0.0;
+        double time = 0.0;
+        if(!calcPitchYaw(pitch, yaw, time, aim_prediction.armors[aim_armor_id.second].x, aim_prediction.armors[aim_armor_id.second].y, aim_prediction.armors[aim_armor_id.second].z + high_offset))
+            return result;
+        // if(!calcPitchYaw(pitch, yaw, time, aim_prediction.armors[aim_armor_id.second].x, aim_prediction.armors[aim_armor_id.second].y, aim_prediction.armors[aim_armor_id.second].z ))
+        //     return result;
+        flyTime = std::chrono::duration<double>(time);
+
+        //rad to degree
+        result.pitch_setpoint = pitch * 180 / PI + param["pitch_offset"].Double();
+        result.yaw_setpoint = yaw * 180 / PI + param["yaw_offset"].Double();
+        result.yaw_setpoint = parsedData.yaw_now + std::remainder(result.yaw_setpoint - parsedData.yaw_now, 360.0);
+        result.valid = true;
+        INFO("aim_pitch:{},aim_yaw:{}",result.pitch_setpoint,result.yaw_setpoint);
+        double tol_pitch = param["shoot_pitch_tol"].Double();
+        double tol_yaw = param["shoot_yaw_tol"].Double();
+        if(std::abs(result.pitch_setpoint - parsedData.pitch_now) > tol_pitch || std::abs(result.yaw_setpoint - parsedData.yaw_now) > tol_yaw)
+        {
+            WARN("pitch or yaw not in tolerance");
+        }
+        else
+        {
+            result.shoot_flag = true;
+        }
+        //UdpSend::sendData((float)result.yaw_setpoint);
+    }
     return result;
-    //下面是火控逻辑
-    // URGENT!!!!!!!!!!!!!!!!
-    
 }
 
 bool Controller::calcPitchYaw(double& pitch, double& yaw, double& time, double target_x, double target_y, double target_z)
 {
+
+Param param("../config.json");
+
+    param = param[param["car_name"].String()];
+    double twohigh = param["2m_highoffset"].Double();
+    double fivehigh = param["5m_highoffset"].Double();
+    double finalhigh = (std::sqrt(target_x * target_x + target_y * target_y) - 2.0)/3.0 * (fivehigh - twohigh) + twohigh;
+    target_z += finalhigh;
+    INFO("targetx,y,z:{},{},{}",target_x,target_y,target_z);
     double distance = sqrt(target_x * target_x + target_y * target_y);
     //double theta = atan2(target_z, distance);
     double theta = pitch;

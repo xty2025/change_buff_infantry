@@ -6,7 +6,7 @@ using namespace serial;
 using namespace aimlog;
 using namespace boost::asio;
 
-auto driver::createSerial() -> std::unique_ptr<driver::Serial> 
+auto serial::createSerial() -> std::unique_ptr<Serial> 
 { 
     return std::make_unique<serial::Serial>(); 
 }
@@ -69,11 +69,19 @@ void Serial::stopSerialThread() {
     }
 }
 
-std::function<void(const ControlResult&)> Serial::sendSerialFunc() {
+std::function<void(const serial::ControlResult&)> Serial::sendSerialFunc() {
     return [this](const ControlResult& result) {
         std::lock_guard<std::mutex> lock(write_mutex_);
+        ControlResult result_ = result;
         // Serialize and send data (implementation depends on data structure)
-        RawSerialWriteData data = serializeControlResult(result);
+                //static Param param("../config.json");
+        // static bool first =true;
+        // if(first)
+        // {param = param[param["car_name"].String()];
+        //   first = false;
+        // }
+        //result_.pitch_setpoint -= param["pitch_begin_offset"].Double();
+        RawSerialWriteData data = serializeControlResult(result_);
         auto write_buffer = std::make_shared<std::vector<uint8_t>>(reinterpret_cast<uint8_t*>(&data), reinterpret_cast<uint8_t*>(&data) + sizeof(data));
         // ASYNC form is dangerous, if you send data too fast, the memory will take up too much
         // async_write(serial_port_, buffer(*write_buffer),
@@ -84,6 +92,7 @@ std::function<void(const ControlResult&)> Serial::sendSerialFunc() {
         //              });
         boost::system::error_code ec;
         write(serial_port_, buffer(*write_buffer), ec);
+        INFO("send pitch: {}", result.pitch_setpoint);
         INFO("send yaw: {}", result.yaw_setpoint);
         if (ec) {
             ERROR("Error during write: {}", ec.message());
@@ -92,7 +101,7 @@ std::function<void(const ControlResult&)> Serial::sendSerialFunc() {
 }
 
 
-ParsedSerialData Serial::findNearestSerialData(const Time::TimeStamp& timestamp) {
+serial::ParsedSerialData Serial::findNearestSerialData(const Time::TimeStamp& timestamp) {
     std::lock_guard<std::mutex> lock(serial_data_mutex_);
     // Simple nearest data search
     if (serial_data_queue_.empty()) {
@@ -155,6 +164,13 @@ void Serial::startAsyncRead() {
 void Serial::handleReadData(RawSerialData& raw_data) {
     if (!enable_CRC_check || validateCRC(raw_data)) {
         ParsedSerialData parsed_data(raw_data);
+        //static Param param("../config.json");
+        // static bool first =true;
+        // if(first)
+        // {param = param[param["car_name"].String()];
+        //   first = false;
+        // }
+        // parsed_data.pitch_now += param["pitch_begin_offset"].Double();
         parsed_data.timestamp.reset();
 
         {
@@ -180,7 +196,7 @@ void Serial::addCRC(RawSerialWriteData& data) {
     addCRC16(&data);
 }
 
-RawSerialWriteData Serial::serializeControlResult(const ControlResult& data) {
+serial::RawSerialWriteData Serial::serializeControlResult(const ControlResult& data) {
     RawSerialWriteData result(data);
     addCRC(result);
     return result;

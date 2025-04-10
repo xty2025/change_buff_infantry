@@ -1,25 +1,34 @@
-#include "driver.hpp"
+#pragma once
 #include <thread>
 #include <queue>
 #include <mutex>
 #include <boost/asio.hpp>
 #include <boost/bind/bind.hpp>
+#include "driver/type.hpp"
+#include "controller/type.hpp"
 // #include <spdlog/spdlog.h>
 // #include <spdlog/sinks/stdout_color_sinks.h>
 
 namespace serial
 {
-    class Serial : public driver::Serial
+    using driver::SerialConfig;
+    using driver::ParsedSerialData;
+    using driver::RawSerialData;
+    using driver::RawSerialWriteData;
+    using driver::TimeImageData;
+    using controller::ControlResult;
+
+    class Serial
     {
         public:
             Serial() : io_context_(), serial_port_(io_context_), running_(false) {};
             ~Serial();
-            void setSerialConfig(SerialConfig config) override;
-            std::function<void(const ControlResult&)> sendSerialFunc() override;
-            void registReadCallback(std::function<void(const ParsedSerialData&)> callback) override;
-            void runSerialThread() override;
-            ParsedSerialData findNearestSerialData(const Time::TimeStamp& timestamp) override;
-            void clearSerialData() override;
+            void setSerialConfig(SerialConfig config);
+            std::function<void(const ControlResult&)> sendSerialFunc();
+            void registReadCallback(std::function<void(const ParsedSerialData&)> callback);
+            void runSerialThread();
+            ParsedSerialData findNearestSerialData(const Time::TimeStamp& timestamp);
+            void clearSerialData();
         private:
             int max_serial_data_queue_size_ = 1000;
             bool enable_CRC_check = true;
@@ -44,8 +53,6 @@ namespace serial
 
             RawSerialWriteData serializeControlResult(const ControlResult& data);
     };
-
-    //A noneed statement only for reminding you.
-    using driver::createSerial;
+    std::unique_ptr<Serial> createSerial();
 
 }
