@@ -7,7 +7,7 @@
 #include "tracker/type.hpp"
 
 namespace predictor {
-    using tracker::TrackResults;
+    using tracker::TrackResultPairs;
 
 class Predictor{
 private:
@@ -18,7 +18,7 @@ private:
 public:
     std::function<Predictions(Time::TimeStamp)> predictFunc();
     Predictions predict(Time::TimeStamp timestamp);
-    void update(const TrackResults& trackResults, const Time::TimeStamp& timestamp);
+    void update(const TrackResultPairs& trackResults, const Time::TimeStamp& timestamp);
     bool Stable() const{return false;};
     
 };

@@ -25,10 +25,10 @@ namespace predictor {
         }
         return predictions;
     }
-    void Predictor::update(const TrackResults& trackResults, const Time::TimeStamp& timestamp)
+    void Predictor::update(const TrackResultPairs& trackResults, const Time::TimeStamp& timestamp)
     {
         std::map<int, std::vector<std::pair<Eigen::VectorXd, int>>> measures;
-        for(const auto& trackResult : trackResults)
+        for(const auto& trackResult : trackResults.first)
         {
             Eigen::VectorXd measure(5);
             // measure[0] = trackResult.extra_center.x;
