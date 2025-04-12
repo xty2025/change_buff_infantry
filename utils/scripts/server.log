@@ -392,3 +392,22 @@
 2025-04-10 23:40:33,106 [INFO] 172.25.240.1 - - [10/Apr/2025 23:40:33] "GET /api/config HTTP/1.1" 200 -
 2025-04-10 23:40:33,190 [INFO] 172.25.240.1 - - [10/Apr/2025 23:40:33] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
 2025-04-10 23:41:13,179 [ERROR] 视频流错误: ("Connection broken: InvalidChunkLength(got length b'', 0 bytes read)", InvalidChunkLength(got length b'', 0 bytes read))
+2025-04-11 22:21:21,112 [INFO] find ip:None
+2025-04-11 22:21:21,118 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8080
+ * Running on http://172.25.248.62:8080
+2025-04-11 22:21:21,118 [INFO] [33mPress CTRL+C to quit[0m
+2025-04-11 22:21:22,449 [INFO] 172.25.240.1 - - [11/Apr/2025 22:21:22] "GET / HTTP/1.1" 200 -
+2025-04-11 22:21:22,496 [INFO] 172.25.240.1 - - [11/Apr/2025 22:21:22] "GET /video_feed HTTP/1.1" 200 -
+2025-04-11 22:21:25,571 [INFO] 172.25.240.1 - - [11/Apr/2025 22:21:25] "GET /api/config HTTP/1.1" 200 -
+2025-04-11 22:21:25,685 [INFO] 172.25.240.1 - - [11/Apr/2025 22:21:25] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2025-04-11 22:37:16,053 [INFO] find ip:None
+2025-04-11 22:37:16,056 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8080
+ * Running on http://172.25.248.62:8080
+2025-04-11 22:37:16,056 [INFO] [33mPress CTRL+C to quit[0m
+2025-04-11 22:37:17,582 [INFO] 172.25.240.1 - - [11/Apr/2025 22:37:17] "GET / HTTP/1.1" 200 -
+2025-04-11 22:37:17,655 [INFO] 172.25.240.1 - - [11/Apr/2025 22:37:17] "GET /video_feed HTTP/1.1" 200 -
+2025-04-11 22:37:18,428 [INFO] 172.25.240.1 - - [11/Apr/2025 22:37:18] "GET /api/config HTTP/1.1" 200 -

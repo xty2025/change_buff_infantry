@@ -91,7 +91,7 @@
         ],
         "camera_external_matrix":{
             "camera_pitch_angle": -0.05, 
-            "#camera_trans": "x,y,z顺序",
+            "#camera_trans": "x,y,z顺序: x向前,y向左,z向上",
             "camera_trans":[0.05, -0.20, 0.05]
         },
         "mouse_require": true,

@@ -2,18 +2,11 @@
 #include <Log/log.hpp>
 #include <opencv2/core/eigen.hpp>
 
-auto solver::createSolver(double X, double Y, double X1, double Y1, double X2, double Y2) -> std::shared_ptr<Solver> {
-    return std::make_unique<solver::Solver>(X, Y, X1, Y1, X2, Y2);
+auto solver::createSolver() -> std::shared_ptr<Solver> {
+    return std::make_unique<solver::Solver>();
 }
 
 namespace solver {
-
-	double Solver::X;
-    double Solver::Y;
-    double Solver::X1;
-    double Solver::Y1;
-    double Solver::X2;
-    double Solver::Y2;
 
 	inline constexpr auto SmallArmorHalfWidth = 0.0675f;
 	inline constexpr auto SmallArmorHalfHeight = 0.0275f;
@@ -81,38 +74,26 @@ PYD Solver::solveArmorPoses(ArmorXYV armor,int car_id,ImuData imuData_deg) {
 			rvec, tvec, false, cv::SOLVEPNP_ITERATIVE);
 	}
 
-	double temp = rvec.ptr<double>(0)[1];
-	rvec.ptr<double>(0)[1] = rvec.ptr<double>(0)[2];
-	rvec.ptr<double>(0)[2] = temp;
-
 	cv::Rodrigues(rvec, m_R);
 	cv::cv2eigen(m_R, e_R);
 	cv::cv2eigen(tvec,e_T);
-	Sophus::SO3<double> armor_rotate(e_R);
 
+	Eigen::Matrix3d R_conversion;
+	// x向前、y向左，z向上
+	R_conversion << 0, 0, 1,
+					-1, 0, 0,
+					0, -1, 0;
+
+	e_R = R_conversion * e_R;
+	e_T = R_conversion * e_T;
+
+	Sophus::SO3<double> armor_rotate(e_R);
+	
+	// TODO: 使用 旋转向量的yaw 角度
 	double yaw = armor_rotate.matrix().eulerAngles(2,1,0)[0];//yaw
 	double pitch = armor_rotate.matrix().eulerAngles(2,1,0)[1];//pitch
 	double roll = armor_rotate.matrix().eulerAngles(2,1,0)[2];//roll
 
-	if (yaw > M_PI_2)
-	{
-		if (pitch > M_PI_4 && roll < -M_PI_4)
-		{
-			yaw = M_PI - yaw;
-		}
-		else if (pitch > M_PI_4 && roll > M_PI_4)
-		{
-			yaw = M_PI - yaw;
-		}
-		else if (pitch < -M_PI_4 && roll > M_PI_4)
-		{
-			yaw = yaw - M_PI;
-		}
-		else if (pitch < -M_PI_4 && roll < -M_PI_4)
-		{
-			yaw = yaw - M_PI;
-		}
-	}
 	armor_to_camera = Sophus::SE3<double>(e_R, e_T);
 	updateGimbalToWorld(imuData_deg);
 	auto armor_to_world = gimbal_to_world * camera_to_gimbal * armor_to_camera;
@@ -120,13 +101,17 @@ PYD Solver::solveArmorPoses(ArmorXYV armor,int car_id,ImuData imuData_deg) {
 	pose.x = armor_to_world.translation()[0];
 	pose.y = armor_to_world.translation()[1];
 	pose.z = armor_to_world.translation()[2];
-	// TODO: 使用 旋转的yaw 角度
+
 	return XYZ2PYD(pose);
 
 }
 
 void Solver::setCameraIntrinsicMatrix(const cv::Mat& cameraIntrinsicMatrix) {
     this->cameraIntrinsicMatrix = cameraIntrinsicMatrix;
+	fx = cameraIntrinsicMatrix.at<double>(0, 0);
+	fy = cameraIntrinsicMatrix.at<double>(1, 1);
+	cx = cameraIntrinsicMatrix.at<double>(0, 2);
+	cy = cameraIntrinsicMatrix.at<double>(1, 2);
 }
 
 void Solver::setCameraOffset(const Eigen::Vector3d& cameraOffset) {

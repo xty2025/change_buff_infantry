@@ -51,8 +51,7 @@ int main() {
     }
     //auto driver = createDriver();
     auto driver = createReplayer("../record/record.mkv", "null", true);
-    auto solver = createSolver(param["X"].Double(), param["Y"].Double(), param["X1"].Double(), 
-                                param["Y1"].Double(), param["X2"].Double(), param["Y2"].Double());
+    auto solver = createSolver();
     auto controller = createController();
     auto predictor = createPredictor();
     auto detector = createDetector(param["model_path"].String(), param["car_model_path"].String(), false);
