@@ -11,6 +11,7 @@ namespace tracker
     struct TrackResult
     {
         ArmorXYV armor;
+        cv::Rect2f rect;
         location::Location location;
         bool visible = true;
         int armor_id;
@@ -19,4 +20,13 @@ namespace tracker
         TrackResult() : armor{XYV(0,0),XYV(0,0),XYV(0,0),XYV(0,0)}, visible(false), armor_id(0), car_id(0) {};
     };
     typedef std::vector<TrackResult> TrackResults;
+    struct CarTrackResult
+    {
+        int car_id;
+        int car_type;
+        cv::Rect2f bounding_rect;
+        CarTrackResult(): car_id(-1), car_type(-1), bounding_rect(0, 0, 0, 0) {};
+    };
+    typedef std::vector<CarTrackResult> CarTrackResults;
+    typedef std::pair<TrackResults, CarTrackResults> TrackResultPairs;
 }

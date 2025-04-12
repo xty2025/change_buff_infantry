@@ -53,6 +53,23 @@ void Tracker::merge(const Detections& detections, double threshold)
     }
 }
 
+void Tracker::merge(const CarDetections& detections, double threshold) 
+{
+    for(const auto& detection : detections) {
+        cv::Rect2f new_car_rect = detection.bounding_rect;
+        auto it = std::remove_if(car_rects.begin(), car_rects.end(), 
+            [&](const auto& existing_car_rect) {
+                // Calculate Intersection over Union (IoU)
+                float intersection_area = (std::get<0>(existing_car_rect) & new_car_rect).area();
+                float union_area = std::get<0>(existing_car_rect).area() + new_car_rect.area() - intersection_area;
+                float iou = intersection_area / union_area;
+                return iou > threshold;
+            });
+        car_rects.erase(it, car_rects.end());
+        car_rects.push_back(std::make_tuple(new_car_rect, -1, detection.tag_id));
+    }
+}
+
 std::vector<cv::Rect2i> Tracker::calcROI(const std::vector<XYV>& projects, int width, int height, int camera_width, int camera_height) 
 {
     std::vector<cv::Rect2i> rois;
@@ -85,7 +102,6 @@ std::vector<cv::Rect2i> Tracker::calcROI(const std::vector<XYV>& projects, int w
     
     return rois;
 }
-
 
 std::pair<double, double> calculateRotatedRect(const ArmorXYV& points_) {
     // 检查输入点数是否为4
@@ -123,13 +139,11 @@ std::pair<double, double> calculateRotatedRect(const ArmorXYV& points_) {
     return {theta, aspectRatio};
 }
 
-
-
 std::map<int, Matcher> matchers;
 
 // 此算法依赖carid的准确性
 //old_prediction: (XYV, car_id, armor_id)
-TrackResults Tracker::getTrackResult(Time::TimeStamp time, ImuData imu) 
+TrackResults Tracker::getArmorTrackResult(const Time::TimeStamp& time, const ImuData& imu) 
 {
     for(const auto& armor : armors_gray) {
         if(dead.find(armor.second) == dead.end()) {
@@ -194,15 +208,184 @@ TrackResults Tracker::getTrackResult(Time::TimeStamp time, ImuData imu)
             TrackResult track_result;
             track_result.armor = *armor_ptr;
             track_result.armor_id = id;
+            {
+                cv::Point2f point1 = cv::Point2f(armor_ptr->at(0).x, armor_ptr->at(0).y);
+                cv::Point2f point2 = cv::Point2f(armor_ptr->at(1).x, armor_ptr->at(1).y);
+                cv::Point2f point3 = cv::Point2f(armor_ptr->at(2).x, armor_ptr->at(2).y);
+                cv::Point2f point4 = cv::Point2f(armor_ptr->at(3).x, armor_ptr->at(3).y);
+                track_result.rect = cv::boundingRect(std::vector<cv::Point2f>{point1, point2, point3, point4});
+            }
             //INFO("Car {} Armor {} at ({}, {})", car_id, id, track_result.extra_center.x, track_result.extra_center.y);
             track_result.car_id = car_id;
             results.push_back(track_result);
         }
     }
+    return results;
+}
 
+
+//算法描述：
+// 【概念定义】
+//   - 完整包含：当rect1完整包含rect2时，rect2在rect1内的面积占rect2面积的90%以上
+//   - 装甲板的rect：每个armor对象中包含的矩形区域
+//
+// 【第一阶段：旧车辆矩形匹配】
+// 1. 计算old_car_rects与car_rects间任意两矩形的距离（采用顶点距离差之和作为损失）
+// 2. 迭代匹配过程：
+//    a. 找出当前损失最小的矩形对
+//    b. 将该对从匹配集合中移除
+//    c. 将car_rects中的矩形标记为对应old_car_rect的编号
+// 3. 当最小损失超过阈值时，停止匹配过程
+// 4. 将car_rects中未匹配的矩形编号标记为-1
+//
+// 【第二阶段：装甲板与车辆矩形匹配】
+// 5. 对每个装甲板armor：
+//    a. 检查是否存在对应car_id的矩形：
+//       - 若存在，判断该矩形是否完整包含armor的rect
+//         * 若完整包含：无需操作
+//         * 若不完整包含：将该矩形标记为未使用(car_id=-1)，执行步骤b
+//       - 若不存在，直接执行步骤b
+//    b. 查找可匹配的矩形：
+//       - 优先在未使用的矩形(car_id=-1)中查找能完整包含armor的矩形
+//       - 若找到，将该矩形的car_id设为armor的car_id
+//       - 若未找到，在已使用的矩形中查找能完整包含armor的矩形
+//       - 若找到，将该矩形的car_id设为armor的car_id
+//       - 若仍未找到，放弃该装甲板的匹配
+//
+// 6. 结果输出：返回所有car_id不为-1的car_rects作为最终匹配结果
+CarTrackResults Tracker::getCarTrackResult(const Time::TimeStamp& time, const ImuData& imu, const TrackResults& armor) 
+{
+    // 第一阶段：旧车辆矩形匹配
+    std::vector<std::tuple<float, int, int>> distances; // (distance, old_idx, new_idx)
+    for (size_t i = 0; i < old_car_rects.size(); i++) {
+        for (size_t j = 0; j < car_rects.size(); j++) {
+            cv::Rect2f old_rect = std::get<0>(old_car_rects[i]);
+            cv::Rect2f new_rect = std::get<0>(car_rects[j]);
+            
+            float dist = 0.0;
+            // 使用矩形四点差值之和作为距离
+            dist += std::abs(old_rect.tl().x - new_rect.tl().x);
+            //dist += std::abs(old_rect.tl().y - new_rect.tl().y);
+            dist += std::abs(old_rect.br().x - new_rect.br().x);
+            //dist += std::abs(old_rect.br().y - new_rect.br().y);
+            distances.push_back(std::make_tuple(dist, i, j));
+        }
+    }
+    
+    const float max_distance_threshold = 400.0f; // 距离阈值，可根据实际情况调整
+    std::sort(distances.begin(), distances.end()); // 按距离从小到大排序
+    
+    // 标记匹配情况
+    std::vector<bool> old_matched(old_car_rects.size(), false);
+    std::vector<bool> new_matched(car_rects.size(), false);
+    std::vector<int> new_car_ids(car_rects.size(), -1);
+    
+    // 迭代匹配过程
+    for (const auto& [dist, old_idx, new_idx] : distances) {
+        if (dist > max_distance_threshold) break; // 当距离超过阈值时停止匹配
+        
+        if (!old_matched[old_idx] && !new_matched[new_idx]) {
+            old_matched[old_idx] = true;
+            new_matched[new_idx] = true;
+            new_car_ids[new_idx] = std::get<1>(old_car_rects[old_idx]); // 记录匹配的car_id
+            INFO("MATCH carid: {} to carid: {}", std::get<1>(old_car_rects[old_idx]), std::get<2>(car_rects[new_idx]));
+        }
+    }
+    
+    // 第二阶段：装甲板与车辆矩形匹配
+    constexpr float contain_threshold = 0.9f; // "完整包含"的阈值
+    
+    for (const auto& armor_result : armor) {
+        int car_id = armor_result.car_id;
+        cv::Rect2f armor_rect = armor_result.rect;
+        
+        bool found = false;
+        
+        // 检查是否存在对应car_id的矩形
+        for (size_t i = 0; i < car_rects.size(); i++) {
+            if (new_car_ids[i] == car_id) {
+                cv::Rect2f car_rect = std::get<0>(car_rects[i]);
+                cv::Rect2f intersection = car_rect & armor_rect;
+                float contained_ratio = armor_rect.area() > 0 ? intersection.area() / armor_rect.area() : 0;
+                
+                if (contained_ratio >= contain_threshold) {
+                    // 完整包含，无需操作
+                    found = true;
+                    break;
+                } else {
+                    // 不完整包含，标记为未使用
+                    new_car_ids[i] = -1;
+                }
+            }
+        }
+        
+        // 如果没找到对应的车辆矩形，尝试寻找可匹配的矩形
+        if (!found) {
+            // 优先在未使用的矩形中查找
+            for (size_t i = 0; i < car_rects.size(); i++) {
+                if (new_car_ids[i] == -1) {
+                    cv::Rect2f car_rect = std::get<0>(car_rects[i]);
+                    cv::Rect2f intersection = car_rect & armor_rect;
+                    float contained_ratio = armor_rect.area() > 0 ? intersection.area() / armor_rect.area() : 0;
+                    
+                    if (contained_ratio >= contain_threshold) {
+                        new_car_ids[i] = car_id;
+                        found = true;
+                        break;
+                    }
+                }
+            }
+            
+            // 如果仍未找到，在已使用的矩形中查找
+            if (!found) {
+                for (size_t i = 0; i < car_rects.size(); i++) {
+                    if (new_car_ids[i] != -1 && new_car_ids[i] != car_id) {
+                        cv::Rect2f car_rect = std::get<0>(car_rects[i]);
+                        cv::Rect2f intersection = car_rect & armor_rect;
+                        float contained_ratio = armor_rect.area() > 0 ? intersection.area() / armor_rect.area() : 0;
+                        
+                        if (contained_ratio >= contain_threshold) {
+                            new_car_ids[i] = car_id;
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // 生成结果
+    CarTrackResults results;
+    
+    // 添加匹配的车辆矩形结果
+    for (size_t i = 0; i < car_rects.size(); i++) {
+        if (new_car_ids[i] != -1) {
+            CarTrackResult car_result;
+            std::get<1>(car_rects[i]) = new_car_ids[i];
+            car_result.car_id = new_car_ids[i];
+            car_result.car_type = std::get<2>(car_rects[i]);
+            car_result.bounding_rect = std::get<0>(car_rects[i]);
+            results.push_back(car_result);
+        }
+    }
+    
+    
+    // 更新old_car_rects为当前帧的car_rects，为下一帧做准备
+    old_car_rects = car_rects;
+    car_rects.clear();
+    
+    return results;
+}
+
+
+TrackResultPairs Tracker::getTrackResult(const Time::TimeStamp& time, const ImuData& imu) 
+{
+    auto armor_results = getArmorTrackResult(time, imu);
+    auto car_results = getCarTrackResult(time, imu, armor_results);
     armors.clear();  // 清空当前帧的装甲板
     armors_gray.clear();
-    return results;
+    return std::make_pair(armor_results, car_results);
 }
 
 bool Tracker::isDetected() 
