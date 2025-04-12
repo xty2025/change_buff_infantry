@@ -19,6 +19,11 @@ namespace controller
     public:
         void registPredictFunc(std::function<Predictions(Time::TimeStamp)> predictFunc);
         ControlResult control(const ParsedSerialData& parsedData);
+        chosen_results choose_target(const Predictions& predictions);
+        void select_target(const Predictions& predictions, bool aim_new_request, double& distance);
+        bool processAimRequest(const ParsedSerialData& parsedData);
+        void getTargetPrediction(const Predictions& predictions_for_time, Prediction& aim_prediction);
+
     private:
         std::function<Predictions(Time::TimeStamp)> predictFunc;
         bool aim_new = false;

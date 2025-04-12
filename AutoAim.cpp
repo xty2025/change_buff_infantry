@@ -150,33 +150,37 @@ int main() {
             predictions = predictor->predict(frame->timestamp);
 
         //calcROI func will automatically filter out the predictions that are not in the camera view
-        std::vector<XYV> projects;
-        for(const auto &prediction : predictions)
-            for(const auto &armor : prediction.armors)
-                if(armor.status != armor.NONEXIST)
-                    projects.push_back(armor.location.getImuCXY(imu_data));
-        auto roi_regions = tracker->calcROI(projects);
-
-        //if(!isLastDetected || deltaTime > reCheckTime || roi_regions.empty())
-        //{
-            tracker->merge(detector->detect(frame->image).first);
-        //}
-        // for(const auto &roi : roi_regions) 
-        // {
-        //     tracker->merge(detector->detect(frame->image, roi).first);
-        //     //cv::rectangle(frame->image, roi, cv::Scalar(0, 255, 0), 2);
-        // }
+        // std::vector<XYV> projects;
+        // for(const auto &prediction : predictions)
+        //     for(const auto &armor : prediction.armors)
+        //         if(armor.status != armor.NONEXIST)
+        //             projects.push_back(armor.location.getImuCXY(imu_data));
+        //auto roi_regions = tracker->calcROI(projects);
+        
+        auto detections = detector->detect(frame->image);
+        tracker->merge(detections.first);
+        tracker->merge(detections.second);
         isLastDetected = tracker->isDetected();
 
         auto trackResults = tracker->getTrackResult(frame->timestamp, imu);
-        for(auto& trackResult : trackResults)
+        for(auto& trackResult : trackResults.first)
         {
             trackResult.location.pyd_imu = solver->solveArmorPoses(trackResult.armor,trackResult.car_id,imu_data);
             trackResult.location.imu = imu_data;
             CXYD coord = trackResult.location.cxy;
             cv::circle(frame->image, cv::Point(coord.cx, coord.cy), 15, cv::Scalar(0, 255, 0), -1);
         }
-        INFO("TrackResults size: {}", trackResults.size());
+        //visualize trackResults on frame
+        for(auto& trackResult : trackResults.second)
+        {
+            auto car_id = trackResult.car_id;
+            auto car_type = trackResult.car_type;
+            auto bounding_rect = trackResult.bounding_rect;
+            cv::rectangle(frame->image, bounding_rect, cv::Scalar(255, 0, 0), 5);
+            cv::putText(frame->image, std::to_string(car_id), bounding_rect.tl(), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 0, 0), 5);
+            cv::putText(frame->image, std::to_string(car_type), bounding_rect.tl() + cv::Point2f(0, 20), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 5);
+        }
+        INFO("TrackResults size: {}", trackResults.first.size());
         predictor->update(trackResults, frame->timestamp);
 
         if(udp_enable)
