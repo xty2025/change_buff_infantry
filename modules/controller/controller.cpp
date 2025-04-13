@@ -45,7 +45,7 @@ bool Controller::processAimRequest(const ParsedSerialData& parsedData)
 }
 
 // 2. 目标选择函数
-void Controller::selectTarget(Predictions& predictions_for_time, std::pair<int,int>&aim_armor_id )
+void Controller::selectTarget(Predictions& predictions_for_time,std:: pair<int,int>&aim_armor_id, Time::TimeStamp now)
 {
     WARN("Invalid car id");
     //重新选择一个距离最近的
@@ -140,9 +140,9 @@ ControlResult Controller::control(const ParsedSerialData& parsedData)
                                   [&](const auto& prediction) { return prediction.id == aim_armor_id.first; });
     
     // 选择目标
-    if(!is_valid_car_id)
+    if(is_valid_car_id)
     {
-        selectTarget(predictions_for_time, aim_armor_id);
+        selectTarget(predictions_for_time, aim_armor_id, now);
     }
     
     // 获取目标预测信息
