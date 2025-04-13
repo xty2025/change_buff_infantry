@@ -142,7 +142,7 @@ ControlResult Controller::control(const ParsedSerialData& parsedData)
     // 选择目标
     if(!is_valid_car_id)
     {
-        select_target(predictions_for_time, aim_armor_id);
+        selectTarget(predictions_for_time, aim_armor_id);
     }
     
     // 获取目标预测信息
