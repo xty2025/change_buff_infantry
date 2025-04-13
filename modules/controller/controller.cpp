@@ -140,7 +140,7 @@ ControlResult Controller::control(const ParsedSerialData& parsedData)
                                   [&](const auto& prediction) { return prediction.id == aim_armor_id.first; });
     
     // 选择目标
-    if(is_valid_car_id)
+    if(!is_valid_car_id)
     {
         select_target(predictions_for_time, aim_armor_id);
     }
