@@ -32,14 +32,12 @@ private:
 
 	double degree2rad = M_PI / 180;
 
-	void updateGimbalToWorld(ImuData imuData_deg);
-
-
 
 public:
 	explicit Solver() = default;
 
 	PYD solveArmorPoses(ArmorXYV armor,int car_id,ImuData imuData_deg);
+	CXYD solvesubArmorPoses(ArmorXYV armor,int car_id,ImuData imuData_deg);
 	inline PYD XYZ2PYD(const XYZ& in) const override
 	{
 		double distance = sqrt(in.x*in.x + in.y*in.y + in.z*in.z);
@@ -102,7 +100,7 @@ public:
 		double Y2C = object_to_camera.translation()[1];
 		double Z2C = object_to_camera.translation()[2];
 
-		// 相机到像素
+		//相机到像素
 		double distance = sqrt(X2C*X2C + Y2C*Y2C + Z2C*Z2C);
 		double kx = -Y2C/X2C;
 		double ky = -Z2C/X2C;
@@ -113,8 +111,6 @@ public:
 		CXYD out = CXYD(X2P, Y2P, distance);
 		return out;
 	}
-
-
 
 
 	inline PYD fuseIMU(const PYD& in, const PYD& imuData) const override

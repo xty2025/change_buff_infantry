@@ -37,18 +37,6 @@ namespace solver {
 		cv::Point3f(-LAHW, -LAHH, 0.0f)
 	};
 
-void Solver::updateGimbalToWorld(ImuData imuData_deg){
-	float yaw = imuData_deg.yaw * degree2rad;
-	float pitch = imuData_deg.pitch * degree2rad;
-	float roll = imuData_deg.roll * degree2rad;
-	Eigen::Matrix3d gimbal_rotation_matrix;
-	gimbal_rotation_matrix = Eigen::AngleAxisd(-yaw, Eigen::Vector3d::UnitY()) *
-							Eigen::AngleAxisd(pitch, Eigen::Vector3d::UnitX()) *
-							Eigen::AngleAxisd(roll, Eigen::Vector3d::UnitZ()); 
-							
-
-	gimbal_to_world = Sophus::SE3(gimbal_rotation_matrix, Eigen::Vector3d(0, 0, 0));
-}
 
 PYD Solver::solveArmorPoses(ArmorXYV armor,int car_id,ImuData imuData_deg) {
 	PYD pyd(imuData_deg);
@@ -79,33 +67,83 @@ PYD Solver::solveArmorPoses(ArmorXYV armor,int car_id,ImuData imuData_deg) {
 	cv::cv2eigen(tvec,e_T);
 
 	Eigen::Matrix3d R_conversion;
+	
+	// 原：x向右，y向下，z向前
 	// x向前、y向左，z向上
 	R_conversion << 0, 0, 1,
 					-1, 0, 0,
 					0, -1, 0;
 
-	e_R = R_conversion * e_R;
-	e_T = R_conversion * e_T;
+	
+	Sophus::SE3<double> transRight(R_conversion, Eigen::Vector3d(0, 0, 0));
 
 	Sophus::SO3<double> armor_rotate(e_R);
 	
 	// TODO: 使用 旋转向量的yaw 角度
-	double yaw = armor_rotate.matrix().eulerAngles(2,1,0)[0];//yaw
-	double pitch = armor_rotate.matrix().eulerAngles(2,1,0)[1];//pitch
-	double roll = armor_rotate.matrix().eulerAngles(2,1,0)[2];//roll
+	// double yaw = armor_rotate.matrix().eulerAngles(2,1,0)[0];//yaw
+	// double pitch = armor_rotate.matrix().eulerAngles(2,1,0)[1];//pitch
+	// double roll = armor_rotate.matrix().eulerAngles(2,1,0)[2];//roll
 
-	armor_to_camera = Sophus::SE3<double>(e_R, e_T);
-	updateGimbalToWorld(imuData_deg);
-	auto armor_to_world = gimbal_to_world * camera_to_gimbal * armor_to_camera;
+	armor_to_camera = transRight *Sophus::SE3<double>(e_R, e_T);
+	auto armor_to_gimbal = camera_to_gimbal * armor_to_camera;
 	XYZ pose;
-	pose.x = armor_to_world.translation()[0];
-	pose.y = armor_to_world.translation()[1];
-	pose.z = armor_to_world.translation()[2];
-
-	return XYZ2PYD(pose);
+	pose.x = armor_to_gimbal.translation()[0];
+	pose.y = armor_to_gimbal.translation()[1];
+	pose.z = armor_to_gimbal.translation()[2];
+	return fuseIMU(XYZ2PYD(pose),imuData_deg);
 
 }
 
+CXYD Solver::solvesubArmorPoses(ArmorXYV armor,int car_id,ImuData imuData_deg) {
+	cv::Mat m_R;
+	cv::Mat m_T;
+	Eigen::Matrix3d e_R;
+	Eigen::Vector3d e_T;
+	std::vector<cv::Point2f> corners;
+
+	for (int i = 0; i < 4; i++) {
+		corners.push_back(cv::Point2f(armor[i].x, armor[i].y));
+	}
+
+	if (car_id != 1 || car_id != 0) { // 英雄和基地除外
+		solvePnP(SmallArmorPoints, corners, cameraIntrinsicMatrix, distorationCoefficients,
+			rvec, tvec, false, cv::SOLVEPNP_ITERATIVE);
+	}else{
+		solvePnP(LargeArmorPoints, corners, cameraIntrinsicMatrix, distorationCoefficients,
+			rvec, tvec, false, cv::SOLVEPNP_ITERATIVE);
+	}
+
+	cv::Rodrigues(rvec, m_R);
+	cv::cv2eigen(m_R, e_R);
+	cv::cv2eigen(tvec,e_T);
+
+	Eigen::Matrix3d R_conversion;
+	
+	// 原：x向右，y向下，z向前
+	// x向前、y向左，z向上
+	R_conversion << 0, 0, 1,
+					-1, 0, 0,
+					0, -1, 0;
+
+	
+	Sophus::SE3<double> transRight(R_conversion, Eigen::Vector3d(0, 0, 0));
+
+	Sophus::SO3<double> armor_rotate(e_R);
+	
+	// TODO: 使用 旋转向量的yaw 角度
+	// double yaw = armor_rotate.matrix().eulerAngles(2,1,0)[0];//yaw
+	// double pitch = armor_rotate.matrix().eulerAngles(2,1,0)[1];//pitch
+	// double roll = armor_rotate.matrix().eulerAngles(2,1,0)[2];//roll
+
+	armor_to_camera = transRight *Sophus::SE3<double>(e_R, e_T);
+	auto armor_to_gimbal = camera_to_gimbal * armor_to_camera;
+	XYZ pose;
+	pose.x = armor_to_gimbal.translation()[0];
+	pose.y = armor_to_gimbal.translation()[1];
+	pose.z = armor_to_gimbal.translation()[2];
+	return PYD2CXYD(XYZ2PYD(pose));
+
+}
 void Solver::setCameraIntrinsicMatrix(const cv::Mat& cameraIntrinsicMatrix) {
     this->cameraIntrinsicMatrix = cameraIntrinsicMatrix;
 	fx = cameraIntrinsicMatrix.at<double>(0, 0);
@@ -125,9 +163,9 @@ void Solver::setCameraExternalMatrix(const Eigen::Vector3d cameraTrans, const do
     Eigen::Vector3d euler_angle(cameraPitchAngle * degree2rad, 0, 0);
     Eigen::Matrix3d rotation_matrix;
 
-    rotation_matrix = Eigen::AngleAxisd(euler_angle[2], Eigen::Vector3d::UnitZ()) * // yaw
+    rotation_matrix = Eigen::AngleAxisd(euler_angle[2], Eigen::Vector3d::UnitZ()) * // roll
                       Eigen::AngleAxisd(euler_angle[0], Eigen::Vector3d::UnitX()) * // pitch
-                      Eigen::AngleAxisd(euler_angle[1], Eigen::Vector3d::UnitY());  // roll
+                      Eigen::AngleAxisd(euler_angle[1], Eigen::Vector3d::UnitY());  // yaw
 	
     this->camera_to_gimbal = Sophus::SE3(rotation_matrix, cameraTrans);
 

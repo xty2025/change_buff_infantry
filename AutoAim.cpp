@@ -9,6 +9,7 @@
 #include <VideoStreamer/VideoStreamer.hpp>
 #include <Recorder/recorder.hpp>
 #include <Location/location.hpp>
+
 using namespace modules;
 using namespace aimlog;
 using namespace recording;
@@ -49,8 +50,8 @@ int main() {
         Recorder::instance().start();
         INFO("Recording started");
     }
-    //auto driver = createDriver();
-    auto driver = createReplayer("../record/record.mkv", "null", true);
+    auto driver = createDriver();
+    //auto driver = createReplayer("../record/record.mkv", "null", true);
     auto solver = createSolver();
     auto controller = createController();
     auto predictor = createPredictor();
@@ -82,10 +83,10 @@ int main() {
         {
             Recorder::instance().addSerialData(parsedData);
         }
-        ControlResult result = controller->control(parsedData);
-        if(force_shoot) result.shoot_flag = 1;
-        result.shoot_flag = shoot_enable? result.shoot_flag : 0;
-        control_func(result);
+        //ControlResult result = controller->control(parsedData);
+        // if(force_shoot) result.shoot_flag = 1;
+        // result.shoot_flag = shoot_enable? result.shoot_flag : 0;
+        // control_func(result);
     });
     driver->runSerialThread();
     driver->runCameraThread();
@@ -165,10 +166,16 @@ int main() {
         auto trackResults = tracker->getTrackResult(frame->timestamp, imu);
         for(auto& trackResult : trackResults.first)
         {
-            trackResult.location.pyd_imu = solver->solveArmorPoses(trackResult.armor,trackResult.car_id,imu_data);
             trackResult.location.imu = imu_data;
+            trackResult.location.pyd_imu = solver->solveArmorPoses(trackResult.armor,trackResult.car_id,imu_data);
             CXYD coord = trackResult.location.cxy;
+            XYZ debug_xyz = trackResult.location.xyz_imu;
+            PYD debug_pyd = trackResult.location.pyd_imu;
+
             cv::circle(frame->image, cv::Point(coord.cx, coord.cy), 15, cv::Scalar(0, 255, 0), -1);
+            std::string text = std::to_string(debug_xyz.x) + " " + std::to_string(debug_xyz.y) + " " + std::to_string(debug_xyz.z);
+            cv::putText(frame->image, text, cv::Point(coord.cx, coord.cy), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 2);
+            
         }
         //visualize trackResults on frame
         for(auto& trackResult : trackResults.second)

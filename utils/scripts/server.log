@@ -411,3 +411,193 @@
 2025-04-11 22:37:17,582 [INFO] 172.25.240.1 - - [11/Apr/2025 22:37:17] "GET / HTTP/1.1" 200 -
 2025-04-11 22:37:17,655 [INFO] 172.25.240.1 - - [11/Apr/2025 22:37:17] "GET /video_feed HTTP/1.1" 200 -
 2025-04-11 22:37:18,428 [INFO] 172.25.240.1 - - [11/Apr/2025 22:37:18] "GET /api/config HTTP/1.1" 200 -
+2025-04-13 17:04:12,971 [INFO] find ip:192.168.137.184
+2025-04-13 17:04:12,978 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8080
+ * Running on http://192.168.137.184:8080
+2025-04-13 17:04:12,978 [INFO] [33mPress CTRL+C to quit[0m
+2025-04-13 17:04:14,821 [INFO] 192.168.137.1 - - [13/Apr/2025 17:04:14] "GET / HTTP/1.1" 200 -
+2025-04-13 17:04:14,854 [WARNING] Failed to parse headers (url=http://127.0.0.1:8081/stream): [StartBoundaryNotFoundDefect(), MultipartInvariantViolationDefect()], unparsed data: ''
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/urllib3/connectionpool.py", line 442, in _make_request
+    assert_header_parsing(httplib_response.msg)
+  File "/usr/lib/python3/dist-packages/urllib3/util/response.py", line 71, in assert_header_parsing
+    raise HeaderParsingError(defects=defects, unparsed_data=unparsed_data)
+urllib3.exceptions.HeaderParsingError: [StartBoundaryNotFoundDefect(), MultipartInvariantViolationDefect()], unparsed data: ''
+2025-04-13 17:04:14,856 [INFO] 192.168.137.1 - - [13/Apr/2025 17:04:14] "GET /video_feed HTTP/1.1" 200 -
+2025-04-13 17:04:17,146 [INFO] 192.168.137.1 - - [13/Apr/2025 17:04:17] "GET /api/config HTTP/1.1" 200 -
+2025-04-13 17:04:17,447 [INFO] 192.168.137.1 - - [13/Apr/2025 17:04:17] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2025-04-13 17:04:47,775 [ERROR] 视频流错误: ('Connection broken: IncompleteRead(0 bytes read)', IncompleteRead(0 bytes read))
+2025-04-13 17:05:21,233 [INFO] find ip:192.168.137.184
+2025-04-13 17:05:21,237 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8080
+ * Running on http://192.168.137.184:8080
+2025-04-13 17:05:21,237 [INFO] [33mPress CTRL+C to quit[0m
+2025-04-13 17:05:23,509 [INFO] 192.168.137.1 - - [13/Apr/2025 17:05:23] "GET / HTTP/1.1" 200 -
+2025-04-13 17:05:23,520 [WARNING] Failed to parse headers (url=http://127.0.0.1:8081/stream): [StartBoundaryNotFoundDefect(), MultipartInvariantViolationDefect()], unparsed data: ''
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/urllib3/connectionpool.py", line 442, in _make_request
+    assert_header_parsing(httplib_response.msg)
+  File "/usr/lib/python3/dist-packages/urllib3/util/response.py", line 71, in assert_header_parsing
+    raise HeaderParsingError(defects=defects, unparsed_data=unparsed_data)
+urllib3.exceptions.HeaderParsingError: [StartBoundaryNotFoundDefect(), MultipartInvariantViolationDefect()], unparsed data: ''
+2025-04-13 17:05:23,521 [INFO] 192.168.137.1 - - [13/Apr/2025 17:05:23] "GET /video_feed HTTP/1.1" 200 -
+2025-04-13 17:05:23,572 [INFO] 192.168.137.1 - - [13/Apr/2025 17:05:23] "GET /api/config HTTP/1.1" 200 -
+2025-04-13 17:05:38,714 [INFO] 192.168.137.1 - - [13/Apr/2025 17:05:38] "GET / HTTP/1.1" 200 -
+2025-04-13 17:05:38,724 [WARNING] Failed to parse headers (url=http://127.0.0.1:8081/stream): [StartBoundaryNotFoundDefect(), MultipartInvariantViolationDefect()], unparsed data: ''
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/urllib3/connectionpool.py", line 442, in _make_request
+    assert_header_parsing(httplib_response.msg)
+  File "/usr/lib/python3/dist-packages/urllib3/util/response.py", line 71, in assert_header_parsing
+    raise HeaderParsingError(defects=defects, unparsed_data=unparsed_data)
+urllib3.exceptions.HeaderParsingError: [StartBoundaryNotFoundDefect(), MultipartInvariantViolationDefect()], unparsed data: ''
+2025-04-13 17:05:38,725 [INFO] 192.168.137.1 - - [13/Apr/2025 17:05:38] "GET /video_feed HTTP/1.1" 200 -
+2025-04-13 17:05:38,747 [INFO] 192.168.137.1 - - [13/Apr/2025 17:05:38] "GET /api/config HTTP/1.1" 200 -
+2025-04-13 17:05:54,311 [ERROR] 视频流错误: ('Connection broken: IncompleteRead(0 bytes read)', IncompleteRead(0 bytes read))
+2025-04-13 17:07:50,219 [INFO] 192.168.137.1 - - [13/Apr/2025 17:07:50] "GET / HTTP/1.1" 200 -
+2025-04-13 17:07:50,229 [WARNING] Failed to parse headers (url=http://127.0.0.1:8081/stream): [StartBoundaryNotFoundDefect(), MultipartInvariantViolationDefect()], unparsed data: ''
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/urllib3/connectionpool.py", line 442, in _make_request
+    assert_header_parsing(httplib_response.msg)
+  File "/usr/lib/python3/dist-packages/urllib3/util/response.py", line 71, in assert_header_parsing
+    raise HeaderParsingError(defects=defects, unparsed_data=unparsed_data)
+urllib3.exceptions.HeaderParsingError: [StartBoundaryNotFoundDefect(), MultipartInvariantViolationDefect()], unparsed data: ''
+2025-04-13 17:07:50,230 [INFO] 192.168.137.1 - - [13/Apr/2025 17:07:50] "GET /video_feed HTTP/1.1" 200 -
+2025-04-13 17:07:50,255 [INFO] 192.168.137.1 - - [13/Apr/2025 17:07:50] "GET /api/config HTTP/1.1" 200 -
+2025-04-13 17:10:33,886 [INFO] find ip:192.168.137.184
+2025-04-13 17:10:33,889 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8080
+ * Running on http://192.168.137.184:8080
+2025-04-13 17:10:33,889 [INFO] [33mPress CTRL+C to quit[0m
+2025-04-13 17:11:07,489 [INFO] 192.168.137.1 - - [13/Apr/2025 17:11:07] "GET / HTTP/1.1" 200 -
+2025-04-13 17:11:07,501 [WARNING] Failed to parse headers (url=http://127.0.0.1:8081/stream): [StartBoundaryNotFoundDefect(), MultipartInvariantViolationDefect()], unparsed data: ''
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/urllib3/connectionpool.py", line 442, in _make_request
+    assert_header_parsing(httplib_response.msg)
+  File "/usr/lib/python3/dist-packages/urllib3/util/response.py", line 71, in assert_header_parsing
+    raise HeaderParsingError(defects=defects, unparsed_data=unparsed_data)
+urllib3.exceptions.HeaderParsingError: [StartBoundaryNotFoundDefect(), MultipartInvariantViolationDefect()], unparsed data: ''
+2025-04-13 17:11:07,502 [INFO] 192.168.137.1 - - [13/Apr/2025 17:11:07] "GET /video_feed HTTP/1.1" 200 -
+2025-04-13 17:11:07,523 [INFO] 192.168.137.1 - - [13/Apr/2025 17:11:07] "GET /api/config HTTP/1.1" 200 -
+2025-04-13 17:11:32,287 [ERROR] 视频流错误: ('Connection broken: IncompleteRead(0 bytes read)', IncompleteRead(0 bytes read))
+2025-04-13 17:12:46,974 [INFO] 192.168.137.1 - - [13/Apr/2025 17:12:46] "GET / HTTP/1.1" 200 -
+2025-04-13 17:12:46,984 [WARNING] Failed to parse headers (url=http://127.0.0.1:8081/stream): [StartBoundaryNotFoundDefect(), MultipartInvariantViolationDefect()], unparsed data: ''
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/urllib3/connectionpool.py", line 442, in _make_request
+    assert_header_parsing(httplib_response.msg)
+  File "/usr/lib/python3/dist-packages/urllib3/util/response.py", line 71, in assert_header_parsing
+    raise HeaderParsingError(defects=defects, unparsed_data=unparsed_data)
+urllib3.exceptions.HeaderParsingError: [StartBoundaryNotFoundDefect(), MultipartInvariantViolationDefect()], unparsed data: ''
+2025-04-13 17:12:46,985 [INFO] 192.168.137.1 - - [13/Apr/2025 17:12:46] "GET /video_feed HTTP/1.1" 200 -
+2025-04-13 17:12:47,007 [INFO] 192.168.137.1 - - [13/Apr/2025 17:12:47] "GET /api/config HTTP/1.1" 200 -
+2025-04-13 17:13:15,377 [ERROR] 视频流错误: ('Connection broken: IncompleteRead(0 bytes read)', IncompleteRead(0 bytes read))
+2025-04-13 17:20:03,265 [INFO] 192.168.137.1 - - [13/Apr/2025 17:20:03] "GET / HTTP/1.1" 200 -
+2025-04-13 17:20:03,276 [WARNING] Failed to parse headers (url=http://127.0.0.1:8081/stream): [StartBoundaryNotFoundDefect(), MultipartInvariantViolationDefect()], unparsed data: ''
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/urllib3/connectionpool.py", line 442, in _make_request
+    assert_header_parsing(httplib_response.msg)
+  File "/usr/lib/python3/dist-packages/urllib3/util/response.py", line 71, in assert_header_parsing
+    raise HeaderParsingError(defects=defects, unparsed_data=unparsed_data)
+urllib3.exceptions.HeaderParsingError: [StartBoundaryNotFoundDefect(), MultipartInvariantViolationDefect()], unparsed data: ''
+2025-04-13 17:20:03,277 [INFO] 192.168.137.1 - - [13/Apr/2025 17:20:03] "GET /video_feed HTTP/1.1" 200 -
+2025-04-13 17:20:03,328 [INFO] 192.168.137.1 - - [13/Apr/2025 17:20:03] "GET /api/config HTTP/1.1" 200 -
+2025-04-13 17:20:12,072 [ERROR] 视频流错误: ('Connection broken: IncompleteRead(0 bytes read)', IncompleteRead(0 bytes read))
+2025-04-13 17:23:31,368 [INFO] 192.168.137.1 - - [13/Apr/2025 17:23:31] "GET / HTTP/1.1" 200 -
+2025-04-13 17:23:31,377 [WARNING] Failed to parse headers (url=http://127.0.0.1:8081/stream): [StartBoundaryNotFoundDefect(), MultipartInvariantViolationDefect()], unparsed data: ''
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/urllib3/connectionpool.py", line 442, in _make_request
+    assert_header_parsing(httplib_response.msg)
+  File "/usr/lib/python3/dist-packages/urllib3/util/response.py", line 71, in assert_header_parsing
+    raise HeaderParsingError(defects=defects, unparsed_data=unparsed_data)
+urllib3.exceptions.HeaderParsingError: [StartBoundaryNotFoundDefect(), MultipartInvariantViolationDefect()], unparsed data: ''
+2025-04-13 17:23:31,377 [INFO] 192.168.137.1 - - [13/Apr/2025 17:23:31] "GET /video_feed HTTP/1.1" 200 -
+2025-04-13 17:23:31,428 [INFO] 192.168.137.1 - - [13/Apr/2025 17:23:31] "GET /api/config HTTP/1.1" 200 -
+2025-04-13 17:23:58,824 [ERROR] 视频流错误: ('Connection broken: IncompleteRead(0 bytes read)', IncompleteRead(0 bytes read))
+2025-04-13 17:24:09,613 [INFO] 192.168.137.1 - - [13/Apr/2025 17:24:09] "GET / HTTP/1.1" 200 -
+2025-04-13 17:24:09,623 [WARNING] Failed to parse headers (url=http://127.0.0.1:8081/stream): [StartBoundaryNotFoundDefect(), MultipartInvariantViolationDefect()], unparsed data: ''
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/urllib3/connectionpool.py", line 442, in _make_request
+    assert_header_parsing(httplib_response.msg)
+  File "/usr/lib/python3/dist-packages/urllib3/util/response.py", line 71, in assert_header_parsing
+    raise HeaderParsingError(defects=defects, unparsed_data=unparsed_data)
+urllib3.exceptions.HeaderParsingError: [StartBoundaryNotFoundDefect(), MultipartInvariantViolationDefect()], unparsed data: ''
+2025-04-13 17:24:09,624 [INFO] 192.168.137.1 - - [13/Apr/2025 17:24:09] "GET /video_feed HTTP/1.1" 200 -
+2025-04-13 17:24:09,675 [INFO] 192.168.137.1 - - [13/Apr/2025 17:24:09] "GET /api/config HTTP/1.1" 200 -
+2025-04-13 17:26:05,990 [INFO] 192.168.137.1 - - [13/Apr/2025 17:26:05] "GET / HTTP/1.1" 200 -
+2025-04-13 17:26:05,999 [ERROR] 视频流错误: HTTPConnectionPool(host='127.0.0.1', port=8081): Max retries exceeded with url: /stream (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f5ab96007f0>: Failed to establish a new connection: [Errno 111] Connection refused'))
+2025-04-13 17:26:06,000 [INFO] 192.168.137.1 - - [13/Apr/2025 17:26:05] "GET /video_feed HTTP/1.1" 200 -
+2025-04-13 17:26:06,055 [INFO] 192.168.137.1 - - [13/Apr/2025 17:26:06] "GET /api/config HTTP/1.1" 200 -
+2025-04-13 17:26:24,030 [INFO] find ip:192.168.137.184
+2025-04-13 17:26:24,032 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8080
+ * Running on http://192.168.137.184:8080
+2025-04-13 17:26:24,032 [INFO] [33mPress CTRL+C to quit[0m
+2025-04-13 17:26:39,180 [INFO] 192.168.137.1 - - [13/Apr/2025 17:26:39] "GET / HTTP/1.1" 200 -
+2025-04-13 17:26:39,191 [WARNING] Failed to parse headers (url=http://127.0.0.1:8081/stream): [StartBoundaryNotFoundDefect(), MultipartInvariantViolationDefect()], unparsed data: ''
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/urllib3/connectionpool.py", line 442, in _make_request
+    assert_header_parsing(httplib_response.msg)
+  File "/usr/lib/python3/dist-packages/urllib3/util/response.py", line 71, in assert_header_parsing
+    raise HeaderParsingError(defects=defects, unparsed_data=unparsed_data)
+urllib3.exceptions.HeaderParsingError: [StartBoundaryNotFoundDefect(), MultipartInvariantViolationDefect()], unparsed data: ''
+2025-04-13 17:26:39,192 [INFO] 192.168.137.1 - - [13/Apr/2025 17:26:39] "GET /video_feed HTTP/1.1" 200 -
+2025-04-13 17:26:39,210 [INFO] 192.168.137.1 - - [13/Apr/2025 17:26:39] "GET /api/config HTTP/1.1" 200 -
+2025-04-13 17:27:10,921 [ERROR] 视频流错误: ('Connection broken: IncompleteRead(0 bytes read)', IncompleteRead(0 bytes read))
+2025-04-13 17:28:36,878 [INFO] 192.168.137.1 - - [13/Apr/2025 17:28:36] "GET / HTTP/1.1" 200 -
+2025-04-13 17:28:36,888 [WARNING] Failed to parse headers (url=http://127.0.0.1:8081/stream): [StartBoundaryNotFoundDefect(), MultipartInvariantViolationDefect()], unparsed data: ''
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/urllib3/connectionpool.py", line 442, in _make_request
+    assert_header_parsing(httplib_response.msg)
+  File "/usr/lib/python3/dist-packages/urllib3/util/response.py", line 71, in assert_header_parsing
+    raise HeaderParsingError(defects=defects, unparsed_data=unparsed_data)
+urllib3.exceptions.HeaderParsingError: [StartBoundaryNotFoundDefect(), MultipartInvariantViolationDefect()], unparsed data: ''
+2025-04-13 17:28:36,888 [INFO] 192.168.137.1 - - [13/Apr/2025 17:28:36] "GET /video_feed HTTP/1.1" 200 -
+2025-04-13 17:28:36,907 [INFO] 192.168.137.1 - - [13/Apr/2025 17:28:36] "GET /api/config HTTP/1.1" 200 -
+2025-04-13 17:29:08,917 [ERROR] 视频流错误: ('Connection broken: IncompleteRead(0 bytes read)', IncompleteRead(0 bytes read))
+2025-04-13 17:31:01,509 [INFO] 192.168.137.1 - - [13/Apr/2025 17:31:01] "GET / HTTP/1.1" 200 -
+2025-04-13 17:31:01,517 [WARNING] Failed to parse headers (url=http://127.0.0.1:8081/stream): [StartBoundaryNotFoundDefect(), MultipartInvariantViolationDefect()], unparsed data: ''
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/urllib3/connectionpool.py", line 442, in _make_request
+    assert_header_parsing(httplib_response.msg)
+  File "/usr/lib/python3/dist-packages/urllib3/util/response.py", line 71, in assert_header_parsing
+    raise HeaderParsingError(defects=defects, unparsed_data=unparsed_data)
+urllib3.exceptions.HeaderParsingError: [StartBoundaryNotFoundDefect(), MultipartInvariantViolationDefect()], unparsed data: ''
+2025-04-13 17:31:01,518 [INFO] 192.168.137.1 - - [13/Apr/2025 17:31:01] "GET /video_feed HTTP/1.1" 200 -
+2025-04-13 17:31:01,539 [INFO] 192.168.137.1 - - [13/Apr/2025 17:31:01] "GET /api/config HTTP/1.1" 200 -
+2025-04-13 17:31:47,768 [ERROR] 视频流错误: ('Connection broken: IncompleteRead(0 bytes read)', IncompleteRead(0 bytes read))
+2025-04-13 17:34:47,009 [INFO] 192.168.137.1 - - [13/Apr/2025 17:34:47] "GET / HTTP/1.1" 200 -
+2025-04-13 17:34:47,018 [WARNING] Failed to parse headers (url=http://127.0.0.1:8081/stream): [StartBoundaryNotFoundDefect(), MultipartInvariantViolationDefect()], unparsed data: ''
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/urllib3/connectionpool.py", line 442, in _make_request
+    assert_header_parsing(httplib_response.msg)
+  File "/usr/lib/python3/dist-packages/urllib3/util/response.py", line 71, in assert_header_parsing
+    raise HeaderParsingError(defects=defects, unparsed_data=unparsed_data)
+urllib3.exceptions.HeaderParsingError: [StartBoundaryNotFoundDefect(), MultipartInvariantViolationDefect()], unparsed data: ''
+2025-04-13 17:34:47,019 [INFO] 192.168.137.1 - - [13/Apr/2025 17:34:47] "GET /video_feed HTTP/1.1" 200 -
+2025-04-13 17:34:47,039 [INFO] 192.168.137.1 - - [13/Apr/2025 17:34:47] "GET /api/config HTTP/1.1" 200 -
+2025-04-13 17:35:11,118 [ERROR] 视频流错误: ('Connection broken: IncompleteRead(0 bytes read)', IncompleteRead(0 bytes read))
+2025-04-13 17:35:18,661 [INFO] 192.168.137.1 - - [13/Apr/2025 17:35:18] "GET / HTTP/1.1" 200 -
+2025-04-13 17:35:18,670 [WARNING] Failed to parse headers (url=http://127.0.0.1:8081/stream): [StartBoundaryNotFoundDefect(), MultipartInvariantViolationDefect()], unparsed data: ''
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/urllib3/connectionpool.py", line 442, in _make_request
+    assert_header_parsing(httplib_response.msg)
+  File "/usr/lib/python3/dist-packages/urllib3/util/response.py", line 71, in assert_header_parsing
+    raise HeaderParsingError(defects=defects, unparsed_data=unparsed_data)
+urllib3.exceptions.HeaderParsingError: [StartBoundaryNotFoundDefect(), MultipartInvariantViolationDefect()], unparsed data: ''
+2025-04-13 17:35:18,670 [INFO] 192.168.137.1 - - [13/Apr/2025 17:35:18] "GET /video_feed HTTP/1.1" 200 -
+2025-04-13 17:35:18,690 [INFO] 192.168.137.1 - - [13/Apr/2025 17:35:18] "GET /api/config HTTP/1.1" 200 -
+2025-04-13 17:35:43,981 [ERROR] 视频流错误: ('Connection broken: IncompleteRead(0 bytes read)', IncompleteRead(0 bytes read))
+2025-04-13 17:35:49,869 [INFO] 192.168.137.1 - - [13/Apr/2025 17:35:49] "GET / HTTP/1.1" 200 -
+2025-04-13 17:35:49,879 [WARNING] Failed to parse headers (url=http://127.0.0.1:8081/stream): [StartBoundaryNotFoundDefect(), MultipartInvariantViolationDefect()], unparsed data: ''
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/urllib3/connectionpool.py", line 442, in _make_request
+    assert_header_parsing(httplib_response.msg)
+  File "/usr/lib/python3/dist-packages/urllib3/util/response.py", line 71, in assert_header_parsing
+    raise HeaderParsingError(defects=defects, unparsed_data=unparsed_data)
+urllib3.exceptions.HeaderParsingError: [StartBoundaryNotFoundDefect(), MultipartInvariantViolationDefect()], unparsed data: ''
+2025-04-13 17:35:49,880 [INFO] 192.168.137.1 - - [13/Apr/2025 17:35:49] "GET /video_feed HTTP/1.1" 200 -
+2025-04-13 17:35:49,901 [INFO] 192.168.137.1 - - [13/Apr/2025 17:35:49] "GET /api/config HTTP/1.1" 200 -
