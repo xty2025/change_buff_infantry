@@ -11,7 +11,7 @@ namespace camera
     class Camera
     {
     public:
-        void setCameraConfig(CameraConfig config);
+        virtual void setCameraConfig(CameraConfig config);
         void runCameraThread();
         bool isExistNewCameraData();
         void getCameraData(std::queue<std::shared_ptr<TimeImageData>>& camera_data_pack);

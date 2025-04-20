@@ -26,10 +26,27 @@ class TimeEKF
     VectorX predict(double dt)
     {
         VectorX X = ekf.Xe;
+        // for(int i = 0; i < N_X; i++)
+        // {
+        //     std::cout << X[i] << " ";
+        // }
         VectorX Xp;
         stateTrans.setDt(dt);
-        stateTrans(X, Xp);
+        //stateTrans(X, Xp);
+        stateTrans(X.data(), Xp.data());
+        // for(int i = 0; i < N_X; i++)
+        // {
+        //     std::cout << Xp[i] << " ";
+        // }
         return Xp;
+    }
+    void setTotalId(int id1, int id2=-1)
+    {
+        measure.setVisibleId(id1, id2);
+    }
+    void resetVisibleId()
+    {
+        measure.resetVisibleId();
     }
     // dont check whether timestamp initialized, just take care of it by yourself 
     VectorX update(const VectorY& Y, const Time::TimeStamp& timestamp, int id)
@@ -37,8 +54,16 @@ class TimeEKF
         stateTrans.setDt((timestamp - lastTime).toSeconds());
         ekf.predict(stateTrans);
         lastTime = timestamp;
+        measure.setMode(true);
         measure.setId(id);
-        return ekf.update(measure, Y);
+        VectorX result = ekf.update(measure, Y);
+        //measure.resetVisibleId();
+        return result;
+    }
+    //get P
+    MatrixXX getP()
+    {
+        return ekf.P;
     }
     
     void init(const MatrixXX& P, const MatrixXX& Q, const MatrixYY& R)
@@ -51,22 +76,16 @@ class TimeEKF
     {
         ekf.Xe = X;
     }
+    VectorX getX()
+    {
+        return ekf.Xe;
+    }
     void setTimeStamp(const Time::TimeStamp& timestamp)
     {
         lastTime = timestamp;
     }
-    //get inner state
-    VectorX getState()
-    {
-        return ekf.Xe;
-    }
-    //get inner covariance
-    MatrixXX getCovariance()
-    {
-        return ekf.P;
-    }
-    private:
         base::EKF<N_X, N_Y> ekf;
+    private:
         stateTransFunc stateTrans;
         measureFunc measure;
         Time::TimeStamp lastTime;

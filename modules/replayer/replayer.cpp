@@ -353,8 +353,8 @@ ParsedSerialData Replayer::findNearestSerialData(const Time::TimeStamp& timestam
     if(onlyVideo_) {
         INFO("OnlyVideo mode: returning ZERO serial data");
         ParsedSerialData zeroData;
-        zeroData.pitch_now = 0.0;
-        zeroData.yaw_now = 0.0;
+        zeroData.pitch_now = 10.0;
+        zeroData.yaw_now = 170.0;
         zeroData.roll_now = 0.0;
         zeroData.actual_bullet_speed = 20.0;
         zeroData.aim_request = false;

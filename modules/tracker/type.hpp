@@ -13,6 +13,7 @@ namespace tracker
         ArmorXYV armor;
         cv::Rect2f rect;
         location::Location location;
+        double yaw;
         bool visible = true;
         int armor_id;
         int car_id;

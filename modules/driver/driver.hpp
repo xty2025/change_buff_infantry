@@ -39,9 +39,18 @@ namespace driver
         std::unique_ptr<Camera> camera;
     public:
         Driver(std::unique_ptr<Serial> serial, std::unique_ptr<Camera> camera): serial(std::move(serial)), camera(std::move(camera)) {};
-        void setSerialConfig(SerialConfig config);
-        void setCameraConfig(CameraConfig config);
-        std::function<void(const ControlResult&)> sendSerialFunc();
+
+        //ATTENTION:This function shouldn't be used in AutoAim
+        //Just for DEBUG
+        [[deprecated("This function is for debug purposes only and should not be used in production.")]]
+        ParsedSerialData getNewestSerialData();
+        [[deprecated("This function is for debug purposes only and should not be used in production.")]]
+        void sendSerialData(const ControlResult& control_result);
+
+
+        void setSerialConfig(SerialConfig config) override;
+        void setCameraConfig(CameraConfig config) override;
+        std::function<void(const ControlResult&)> sendSerialFunc() override;
         void registReadCallback(std::function<void(const ParsedSerialData&)> callback);
         void runSerialThread();
         void runCameraThread();

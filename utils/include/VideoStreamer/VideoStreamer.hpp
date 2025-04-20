@@ -75,7 +75,7 @@ private:
 
 private:
     inline static int port_ = 8081;
-    inline static std::string local_ip_ = "192.168.137.184";
+    inline static std::string local_ip_ = "127.0.0.1";
     inline static int jpeg_quality_ = 50;
     inline static std::unique_ptr<httplib::Server> server_;
     inline static std::thread server_thread_;

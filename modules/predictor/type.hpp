@@ -8,33 +8,23 @@ namespace predictor
 {
     struct Armor {
         enum armor_status {
-            NONEXIST,
+            NONEXIST,//temply not used
             UNSEEN,
             AVAILABLE
         };
-        location::Location location;
-        double gen_cam_x, gen_cam_y, gen_cam_dist;
-        double cam_x, cam_y;
-        double x, y, z;
+        XYZ center;
         double yaw;
+        double theta;// like yaw
         int id;
         armor_status status = NONEXIST;
     };
 
     struct Prediction {
-        enum state_type {
-            STILL,
-            LINERAL,
-            ROTATE,
-            UNKNOW
-        };
-        location::Location location;
-        state_type status = UNKNOW;
+        XYZ center;
         int id;
-        double gen_cam_x, gen_cam_y;
-        double target_z;
-        double x, y, z0, z1, theta;
-        double dist;
+        double vx, vy;
+        double z1, z2;
+        double theta, omega;
         double r1, r2;
         std::array<Armor, 4> armors;
     };

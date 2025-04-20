@@ -9,6 +9,15 @@ auto detector::createDetector(const std::string &armor_model_path, const std::st
 namespace detector
 {
     std::pair<std::vector<Detection>, std::vector<CarDetection>> Detector::detect(const cv::Mat &image, const cv::Rect &roi) {
+        if(image.empty()) {
+            ERROR("Image is empty");
+            return {};
+        }
+        // if(image.cols != 1280 || image.rows != 720) {
+        //     ERROR("Image size is not 1280x720");
+        //     INFO("Image size: {}x{}", image.cols, image.rows);
+        //     return {};
+        // }
         // 使用异步方式启动ArmorOneStage检测
         auto armor_future = std::async(std::launch::async, [&]() {
             bool use_roi = (roi.size() != cv::Size(0,0));
@@ -22,6 +31,7 @@ namespace detector
         
         // 等待ArmorOneStage检测完成并处理结果
         BBoxes detection = armor_future.get();
+        //BBoxes detection = BBoxes();
         std::vector<Detection> detections;
         detections.reserve(detection.size());
         

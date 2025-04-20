@@ -9,7 +9,6 @@
 #include <VideoStreamer/VideoStreamer.hpp>
 #include <Recorder/recorder.hpp>
 #include <Location/location.hpp>
-
 using namespace modules;
 using namespace aimlog;
 using namespace recording;
@@ -50,9 +49,10 @@ int main() {
         Recorder::instance().start();
         INFO("Recording started");
     }
-    auto driver = createDriver();
-    //auto driver = createReplayer("../record/record.mkv", "null", true);
-    auto solver = createSolver();
+    //auto driver = createDriver();
+    auto driver = createReplayer("../record/record.mkv", "null", true, 1);
+    auto solver = createSolver(param["X"].Double(), param["Y"].Double(), param["X1"].Double(), 
+                                param["Y1"].Double(), param["X2"].Double(), param["Y2"].Double());
     auto controller = createController();
     auto predictor = createPredictor();
     auto detector = createDetector(param["model_path"].String(), param["car_model_path"].String(), false);
@@ -83,37 +83,31 @@ int main() {
         {
             Recorder::instance().addSerialData(parsedData);
         }
-        //ControlResult result = controller->control(parsedData);
-        // if(force_shoot) result.shoot_flag = 1;
-        // result.shoot_flag = shoot_enable? result.shoot_flag : 0;
-        // control_func(result);
+        ControlResult result = controller->control(parsedData);
+        if(force_shoot) result.shoot_flag = 1;
+        result.shoot_flag = shoot_enable? result.shoot_flag : 0;
+        control_func(result);
     });
     driver->runSerialThread();
     driver->runCameraThread();
 
     int receive_enemy_color = 0;
-    cv::Mat cameraIntrinsicMatrix = cv::Mat(3, 3, CV_64F);
-    cv::Mat distorationCoefficients = cv::Mat(1, 5, CV_64F);
+    Eigen::Matrix3d cameraIntrinsicMatrix;
     
     // Load camera intrinsic matrix from parameter file
     auto intrinsicArray = param["camera_intrinsic_matrix"].to<std::vector<std::vector<double>>>();
     for (int i = 0; i < 3; ++i)
         for (int j = 0; j < 3; ++j)
-            cameraIntrinsicMatrix.at<double>(i, j) = intrinsicArray[i][j];
+            cameraIntrinsicMatrix(i, j) = intrinsicArray[i][j];
     solver->setCameraIntrinsicMatrix(cameraIntrinsicMatrix);
     auto cameraOffset = Eigen::Vector3d(0.0, 0.0, 0.0);
     solver->setCameraOffset(cameraOffset);
-    //Eigen::Vector5d distorationCoefficients = Eigen::Vector5d(-0.0658577209154935, 0.125641157995530, 0, 0, -0.0808951533858169);
-    auto distorationCoefficientsArray = param["camera_distortion_matrix"].to<std::vector<double>>();
+    //Eigen::Vector5d distortionCoefficients = Eigen::Vector5d(-0.0658577209154935, 0.125641157995530, 0, 0, -0.0808951533858169);
+    auto distortionCoefficientsArray = param["camera_distortion_matrix"].to<std::vector<double>>();
+    Eigen::Vector5d distortionCoefficients;
     for (int i = 0; i < 5; ++i)
-        distorationCoefficients.at<double>(0, i) = distorationCoefficientsArray[i];
-    solver->setDistorationCoefficients(distorationCoefficients);
-
-    auto cameraTransArray = param["camera_external_matrix"]["camera_trans"].to<std::vector<double>>();
-    Eigen::Vector3d cameraTrans(cameraTransArray[0], cameraTransArray[1], cameraTransArray[2]);
-    auto cameraPitchAngle = param["camera_external_matrix"]["camera_pitch_angle"].Double();
-    solver->setCameraExternalMatrix(cameraTrans, cameraPitchAngle);
-
+        distortionCoefficients(i) = distortionCoefficientsArray[i];
+    solver->setDistorationCoefficients(distortionCoefficients);
 
     bool autoEnemy = (enemyTrans[param["enemy_color"].String()] == -1);
     if(!autoEnemy)
@@ -146,9 +140,9 @@ int main() {
         driver->clearSerialData();
 
 
-        std::vector<Prediction> predictions;
-        if(predictor->Stable())
-            predictions = predictor->predict(frame->timestamp);
+        // std::vector<Prediction> predictions;
+        // if(predictor->Stable())
+        //     predictions = predictor->predict(frame->timestamp);
 
         //calcROI func will automatically filter out the predictions that are not in the camera view
         // std::vector<XYV> projects;
@@ -166,16 +160,27 @@ int main() {
         auto trackResults = tracker->getTrackResult(frame->timestamp, imu);
         for(auto& trackResult : trackResults.first)
         {
+            //search car_id in trackResults.second
+            auto it = std::find_if(trackResults.second.begin(), trackResults.second.end(), [&trackResult](const auto& armor) {
+                return armor.car_id == trackResult.car_id;
+            });
+            PYD pyd_imu;
+            double yaw = 0;
+            if(it == trackResults.second.end())
+                std::tie(pyd_imu, yaw) = solver->camera2world(trackResult.armor, imu_data, trackResult.car_id == 1);
+            else
+            {
+                std::tie(pyd_imu, yaw) = solver->camera2worldWithWholeCar(trackResult.armor, imu_data, it->bounding_rect, trackResult.car_id == 1);
+            }
             trackResult.location.imu = imu_data;
-            trackResult.location.pyd_imu = solver->solveArmorPoses(trackResult.armor,trackResult.car_id,imu_data);
+            trackResult.location.pyd_imu = pyd_imu;
+            //XYZ tmp = trackResult.location.xyz_imu;
+            //trackResult.location.xyz_imu = tmp; 
+            trackResult.yaw = yaw;
             CXYD coord = trackResult.location.cxy;
-            XYZ debug_xyz = trackResult.location.xyz_imu;
-            PYD debug_pyd = trackResult.location.pyd_imu;
-
             cv::circle(frame->image, cv::Point(coord.cx, coord.cy), 15, cv::Scalar(0, 255, 0), -1);
-            std::string text = std::to_string(debug_xyz.x) + " " + std::to_string(debug_xyz.y) + " " + std::to_string(debug_xyz.z);
-            cv::putText(frame->image, text, cv::Point(coord.cx, coord.cy), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 2);
-            
+            std::string text = std::to_string(trackResult.yaw);
+            cv::putText(frame->image, text, cv::Point(coord.cx, coord.cy), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 255), 2);
         }
         //visualize trackResults on frame
         for(auto& trackResult : trackResults.second)
@@ -189,6 +194,31 @@ int main() {
         }
         INFO("TrackResults size: {}", trackResults.first.size());
         predictor->update(trackResults, frame->timestamp);
+
+        //DEBUG
+        auto predictions = predictor->predict(frame->timestamp);
+        //visualize predictions on frame
+        for(auto& prediction : predictions)
+        {
+            XYZ center = prediction.center;
+            INFO("ENTER center: x: {}, y: {}, z: {}", center.x, center.y, center.z);
+            //trans to CXYD
+            location::Location temp;
+            temp.imu = imu_data;
+            temp.xyz_imu = center;
+            CXYD coord = temp.cxy;
+            INFO("ENTER coord: cx: {}, cy: {}, distance: {}", coord.cx, coord.cy, coord.distance);
+            cv::circle(frame->image, cv::Point(coord.cx, coord.cy), 15, cv::Scalar(100, 255, 100), -1);
+            for(auto& armor : prediction.armors)
+            {
+                auto armor_center = armor.center;
+                temp.xyz_imu = armor_center;
+                CXYD armor_coord = temp.cxy;
+                cv::circle(frame->image, cv::Point(armor_coord.cx, armor_coord.cy), 15, cv::Scalar(100, 255, 100), -1);
+                std::string text = std::to_string(armor.yaw - temp.imu.yaw);
+                cv::putText(frame->image, text, cv::Point(armor_coord.cx, armor_coord.cy), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 255), 2);
+            }
+        }
 
         if(udp_enable)
             UdpSend::sendTail();

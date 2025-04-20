@@ -19,7 +19,8 @@ namespace detector
     {
         cv::Rect2f bounding_rect;
         cv::Point2f center;
-        int tag_id;
+        int tag_id;// will be used for recognize Car's Model
+        //but now it's not used
         float score;
     };
     typedef std::vector<CarDetection> CarDetections;

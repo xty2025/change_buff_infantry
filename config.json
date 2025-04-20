@@ -51,6 +51,7 @@
             "ip": "192.168.137.1",
             "port": 4096
         },
+        "armor_yaw_shoot_allow": 45.0,
         "shoot_pitch_tol": 2.0,
         "shoot_yaw_tol": 3.0,
         "rotate_shoot_pitch_tol": 2.0,
@@ -80,7 +81,7 @@
         "baud_rate": 115200,
         "camera_id": "KE0200060397",
         "exposure_time": 5000,
-        "gain": 8,
+        "gain": 12,
         "camera_intrinsic_matrix": [
             [1268.19886430029, 0, 630.954427985621],
                              [0, 1268.23774017347, 487.698003221433],
@@ -89,14 +90,9 @@
         "camera_distortion_matrix": [
             -0.196854458412759, 0.0928923269301880, 0, 0, 0.0642790747423870
         ],
-        "camera_external_matrix":{
-            "camera_pitch_angle": 0.0, 
-            "#camera_trans": "x,y,z顺序: x向前,y向左,z向上",
-            "camera_trans":[0.05, -0.60, 0.05]
-        },
-        "mouse_require": true,
+        "mouse_require": false,
         "enemy_color" : "red",
-        "shoot_enable": true,
+        "shoot_enable": false,
         "force_shoot" : false
     }
 }

@@ -19,11 +19,6 @@ namespace controller
     public:
         void registPredictFunc(std::function<Predictions(Time::TimeStamp)> predictFunc);
         ControlResult control(const ParsedSerialData& parsedData);
-        chosen_results choose_target(const Predictions& predictions);
-        void selectTarget(Predictions& predictions_for_time,std:: pair<int,int>&aim_armor_id, Time::TimeStamp now);
-        bool processAimRequest(const ParsedSerialData& parsedData);
-        void getTargetPrediction(const Predictions& predictions_for_time, Prediction& aim_prediction, bool& is_valid_car_id);
-
     private:
         std::function<Predictions(Time::TimeStamp)> predictFunc;
         bool aim_new = false;
@@ -36,7 +31,7 @@ namespace controller
         double bullet_speed = 24.5;
         double bullet_mass = 3.2e-3;
         double bullet_diameter = 16.8e-3;
-        //bool calcPitchYaw(double& pitch, double& yaw, double& time, double target_x, double target_y, double target_z);
+        bool calcPitchYaw(double& pitch, double& yaw, double& time, double target_x, double target_y, double target_z);
         std::chrono::duration<double> shootDelay = 0.1s;
         std::chrono::duration<double> flyTime = 0.0s;
     };

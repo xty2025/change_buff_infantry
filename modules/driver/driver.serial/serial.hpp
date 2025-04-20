@@ -23,8 +23,10 @@ namespace serial
         public:
             Serial() : io_context_(), serial_port_(io_context_), running_(false) {};
             ~Serial();
-            void setSerialConfig(SerialConfig config);
-            std::function<void(const ControlResult&)> sendSerialFunc();
+
+        virtual void setSerialConfig(SerialConfig config);
+
+        virtual std::function<void(const ControlResult&)> sendSerialFunc();
             void registReadCallback(std::function<void(const ParsedSerialData&)> callback);
             void runSerialThread();
             ParsedSerialData findNearestSerialData(const Time::TimeStamp& timestamp);

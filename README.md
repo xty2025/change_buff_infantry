@@ -1,5 +1,4 @@
 # AutoAim
-
 version 0.0.2(unfinished)
 
 **可使用WSL2运行+调试功能**
@@ -9,7 +8,6 @@ version 0.0.2(unfinished)
 **To see human-written files, turn to file TODO.md**.
 
 ## 系统架构
-
 系统由以下核心模块组成：
 
 - **Driver**: 硬件驱动模块，负责相机图像采集和串口通信
@@ -21,7 +19,6 @@ version 0.0.2(unfinished)
 - **Replayer**: 数据回放模块，用于离线调试与分析
 
 ## 依赖库
-
 - OpenCV 4.8.0+
 - Eigen3
 - Boost
@@ -30,13 +27,9 @@ version 0.0.2(unfinished)
 - Ceres
 
 ## 构建与安装
-
 ### 环境准备
-
 OpenVINO的升级建议使用官网APT安装方法。
-
 ### 编译
-
 ```bash
 mkdir build && cd build
 cmake .. && make
@@ -45,14 +38,12 @@ cmake .. && make
 编译后的可执行文件将生成在 `bin` 目录下。
 
 ## 运行
-
 ```bash
 cd bin
 ./AutoAim
 ```
 
 ## 配置说明
-
 系统配置文件位于 `config.json`，主要参数包括：
 
 - 相机参数
@@ -61,7 +52,6 @@ cd bin
 - 算法参数
 
 可以使用提供的 Web 配置工具进行图形化配置：
-
 ```bash
 cd utils/scripts
 python server.py
@@ -84,7 +74,6 @@ python server.py
 ## 开发指南
 
 ### 代码结构
-
 ```
 AutoAim/
 ├── modules/           # 核心功能模块
@@ -102,7 +91,6 @@ AutoAim/
 ```
 
 ### 模块扩展
-
 要扩展特定模块功能，可以参考每个模块下的类型定义和接口说明。每个模块都设计了清晰的接口，便于功能扩展。
 
 ## 调试工具
@@ -112,9 +100,7 @@ AutoAim/
 - **录制回放**: 使用 Recorder 工具录制数据，用 Replayer 模块回放分析
 
 ## 注意事项
-
 - 确保相机和串口设备权限正确
 
 ### TODO
-
 查看 `TODO.md` 文件，了解当前开发进度，问题，待办事项。
