@@ -4,16 +4,20 @@
 #include "TimeStamp/TimeStamp.hpp"
 #include "Log/log.hpp"
 
+#define USE_OLD_MODEL false
+
 namespace detector
 {
     //params
     static constexpr int INPUT_W = 416;   // Width of input
     static constexpr int INPUT_H = 416;   // Height of input
-    static constexpr int NUM_CLASSES = 8; // Number of classes
-    static constexpr int NUM_COLORS = 8;  // Number of color
+//    static constexpr int NUM_CLASSES = 8; // Number of classes
+//    static constexpr int NUM_COLORS = 8;  // Number of color
+    static constexpr int NUM_CLASSES = USE_OLD_MODEL? 8 : 1;
+    static constexpr int NUM_COLORS = USE_OLD_MODEL? 8 : 2;  // Number of color
     static constexpr int TOPK = 128;      // TopK
     static constexpr float NMS_THRESH = 0.3;
-    static constexpr float BBOX_CONF_THRESH = 0.6;
+    static constexpr float BBOX_CONF_THRESH = 0.5;
     static constexpr float MERGE_CONF_ERROR = 0.15;
     static constexpr float MERGE_MIN_IOU = 0.9;
 
@@ -154,7 +158,8 @@ namespace detector
                 bbox.color_id = box_color;
                 bbox.confidence = box_prob;
                 bbox.area = bbox.rect.area();
-                if(box_color/2 == color_flag )//|| (allowGray && (box_color/2 == 2)))
+                //if(box_color/2 == color_flag )//|| (allowGray && (box_color/2 == 2)))
+                if(((!USE_OLD_MODEL) && (box_color == color_flag) )||(USE_OLD_MODEL&&(box_color/2 == color_flag)))
                 {
                     bboxes.push_back(bbox);
                 }
@@ -327,7 +332,7 @@ namespace detector
                 (*bbox).center=((*bbox).corners[0]+(*bbox).corners[1]+(*bbox).corners[2]+(*bbox).corners[3])/4;
             }
 
-            std::swap((*bbox).corners[1],(*bbox).corners[3]);
+            USE_OLD_MODEL?(std::swap((*bbox).corners[1],(*bbox).corners[3]),1):0;
             
             // 检查角点是否在图像范围内
             bool valid_corners = true;
@@ -364,20 +369,20 @@ namespace detector
             }
         }
         INFO("Armor Detect cost time: {}ms", (Time::TimeStamp::now() - time_stamp).toSeconds() * 1000);
-        // //debug:
-        //for (auto bbox = bboxes_temp.begin(); bbox != bboxes_temp.end(); ++bbox)
-        //{
-        //    //use corner
-        //    cv::line(temp, bbox->corners[0], bbox->corners[1], cv::Scalar(0, 255, 0), 2);
-        //    cv::line(temp, bbox->corners[1], bbox->corners[2], cv::Scalar(0, 255, 0), 2);
-        //    cv::line(temp, bbox->corners[2], bbox->corners[3], cv::Scalar(0, 255, 0), 2);
-        //    cv::line(temp, bbox->corners[3], bbox->corners[0], cv::Scalar(0, 255, 0), 2);
-        //    //use center
-        //    cv::circle(temp, bbox->center, 3, cv::Scalar(0, 255, 0), -1);
-        //}
-        //cv::namedWindow("result",cv::WINDOW_NORMAL);
-        //cv::imshow("result",temp);
-        //cv::waitKey(1);
+//         //debug:
+        for (auto bbox = bboxes_temp.begin(); bbox != bboxes_temp.end(); ++bbox)
+        {
+            //use corner
+            cv::line(img, bbox->corners[0], bbox->corners[1], cv::Scalar(0, 255, 0), 2);
+            cv::line(img, bbox->corners[1], bbox->corners[2], cv::Scalar(0, 255, 0), 2);
+            cv::line(img, bbox->corners[2], bbox->corners[3], cv::Scalar(0, 255, 0), 2);
+            cv::line(img, bbox->corners[3], bbox->corners[0], cv::Scalar(0, 255, 0), 2);
+            //use center
+            cv::circle(img, bbox->center, 3, cv::Scalar(0, 255, 0), -1);
+        }
+//        //cv::namedWindow("result",cv::WINDOW_NORMAL);
+//        //cv::imshow("result",temp);
+//        //cv::waitKey(1);
 
 
         return bboxes_temp;

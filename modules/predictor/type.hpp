@@ -27,6 +27,7 @@ namespace predictor
         double theta, omega;
         double r1, r2;
         std::array<Armor, 4> armors;
+        bool stable = true;
     };
 
     typedef std::vector<Prediction> Predictions;

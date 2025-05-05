@@ -20,9 +20,11 @@ namespace predictor {
         {
             if(car->Stable())
             {
-                predictions.push_back(model2world(car->getPredictResult(timestamp),carid, std::function<VectorY(const VectorX&, int)>([&](const VectorX& state, int carid) {
-                    return car->measureFromState(state, carid);
+                predictions.push_back(model2world(car->getPredictResult(timestamp),std::function<VectorY(const VectorX&, int)>([&](const VectorX& state, int armorid) {
+                    return car->measureFromState(state, armorid);
                 })));
+                predictions.back().id = carid;
+                predictions.back().stable = car->armorStable();
             }
             else
                 WARN("Car {} is not stable", carid);
@@ -114,7 +116,7 @@ namespace predictor {
 
 //state: x,vx,y,vy,theta,omega,r1,r2,z1,z2
 //function param: VectorX, int -> VectorY
-    Prediction Predictor::model2world(const VectorX& state, int carid, std::function<VectorY(const VectorX&, int)> measureFunc)
+    Prediction Predictor::model2world(const VectorX& state, std::function<VectorY(const VectorX&, int)> measureFunc)
     {
         INFO("ENTER model2world");
         INFO("ENTER state: {}, {}, {}, {}, {}, {}, {}, {}, {}, {}", state[0], state[1], state[2], state[3], state[4], state[5], state[6], state[7], state[8], state[9]);
@@ -123,7 +125,6 @@ namespace predictor {
         xyz.x = -state[2];
         xyz.y = -state[0];
         xyz.z = (state[8] + state[9]) / 2.0;
-        prediction.id = carid;
         prediction.center = xyz;
         prediction.vx = -state[3];
         prediction.vy = -state[1];

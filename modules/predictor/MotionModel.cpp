@@ -34,10 +34,11 @@ void MotionModel::initMotionModel()
     R << 0.03,  0.01,  0,     0,     0,     0,
          0.01,  0.03,  0,     0,     0,     0,
          0,     0,     0.03,  0,     0,     0,
-         0,     0,     0,     0.03,  0,     0,
+         0,     0,     0,     0.1,   0,     0,
          0,     0,     0,     0,     0.04,  0.015,
          0,     0,     0,     0,     0.015, 0.04;
-    //R *= 10; 
+    //R *= 10;
+    R *= 0.1;
     ekf.init(P, Q, R);
 }
 
@@ -89,6 +90,23 @@ void MotionModel::Update(const VectorY& measure_vec, const Time::TimeStamp& time
         std::cout<<"residual4:"<<residual[4]<<std::endl;
         std::cout<<"residual5:"<<residual[5]<<std::endl;
 
+        // according to residual
+        // determine whole car stable & armor stable
+        if(residual[0] > 0.5 || residual[1] > 0.5 || residual[2] > 0.5)
+        {
+            whole_car_stable = false;
+            armor_stable = false;
+        }
+        else if(residual[0] > 0.2 || residual[1] > 0.2 || residual[2] > 0.2)
+        {
+            whole_car_stable = true;
+            armor_stable = false;
+        }
+        else
+        {
+            whole_car_stable = true;
+            armor_stable = true;
+        }
         
         ekf.setTotalId(id1, id2);
         INFO("set total id: {}, {}", id1, id2);

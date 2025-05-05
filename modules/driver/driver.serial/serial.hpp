@@ -32,6 +32,10 @@ namespace serial
             ParsedSerialData findNearestSerialData(const Time::TimeStamp& timestamp);
             void clearSerialData();
         private:
+            bool tryOpenPort(const std::string& port_name, int baud_rate);
+            bool reconnectSerialPort();
+            std::vector<std::string> available_ports_;
+            int baud_rate_ = 115200;
             int max_serial_data_queue_size_ = 1000;
             bool enable_CRC_check = true;
             void stopSerialThread();
@@ -39,6 +43,7 @@ namespace serial
             boost::asio::io_context io_context_;
             boost::asio::serial_port serial_port_;
             std::thread serial_thread_;
+            std::thread check_thread_;
             std::atomic<bool> running_;
             std::mutex serial_data_mutex_;
             std::mutex write_mutex_;

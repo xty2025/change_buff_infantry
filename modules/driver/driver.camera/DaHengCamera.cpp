@@ -82,6 +82,25 @@ namespace camera
         // Get device enumerated number
         status = GXUpdateDeviceList(&ui32DeviceNum, 1000);
         GX_VERIFY_EXIT(status);
+        if (status == GX_STATUS_SUCCESS&&ui32DeviceNum> 0)
+        {
+            GX_DEVICE_BASE_INFO *pBaseinfo = new GX_DEVICE_BASE_INFO[ui32DeviceNum];
+            size_t nSize = ui32DeviceNum * sizeof(GX_DEVICE_BASE_INFO);
+            //获取所有设备的基础信息
+            status = GXGetAllDeviceBaseInfo(pBaseinfo, &nSize);
+            if(status != GX_STATUS_SUCCESS)
+            {
+                delete []pBaseinfo;
+                GX_VERIFY_EXIT(status);
+            }
+            printf("<Device Number : %d>\n", ui32DeviceNum);
+            for (uint32_t i = 0; i < ui32DeviceNum; i++)
+            {
+                printf("\t\t<Device %d SN: %s>\n", i, pBaseinfo[i].szSN);
+            }
+            delete []pBaseinfo;
+        }
+        GX_VERIFY_EXIT(status);
 
         // If no device found, app exit<char*>(const char*);
         if (ui32DeviceNum <= 0)
@@ -95,11 +114,29 @@ namespace camera
         //         char g_pDeviceSN[] = "KE0200060397";
         GX_OPEN_PARAM stOpenParam;
         stOpenParam.accessMode = GX_ACCESS_EXCLUSIVE;
-        stOpenParam.openMode = GX_OPEN_SN;
-        stOpenParam.pszContent = g_pDeviceSN;
+
+        //add support of auto SN
+        if(strcmp(g_pDeviceSN, "auto") == 0)
+        {
+            stOpenParam.openMode = GX_OPEN_INDEX;
+            stOpenParam.pszContent = (char *)"1";
+        }
+        else
+        {
+            stOpenParam.openMode = GX_OPEN_SN;
+            stOpenParam.pszContent = g_pDeviceSN;
+        }
 
         // Open device
         status = GXOpenDevice(&stOpenParam, &g_hDevice);
+        if(status != GX_STATUS_SUCCESS)
+        {
+            printf("Open camera %s failed\n", g_pDeviceSN);
+            printf("try auto open camera\n");
+            stOpenParam.openMode = GX_OPEN_INDEX;
+            stOpenParam.pszContent = (char *)"1";
+            status = GXOpenDevice(&stOpenParam, &g_hDevice);
+        }
         GX_VERIFY_EXIT(status);
 
         // Get Device Info

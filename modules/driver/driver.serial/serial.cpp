@@ -2,6 +2,7 @@
 #include "Log/log.hpp"
 #include "CRC16.h"
 #include <termios.h>
+#include <sstream>
 using namespace serial;
 using namespace aimlog;
 using namespace boost::asio;
@@ -19,33 +20,92 @@ Serial::~Serial() {
     }
 }
 
-void Serial::setSerialConfig(SerialConfig config) {
+// 分割串口名称字符串
+std::vector<std::string> splitPorts(const std::string& ports_str) {
+    std::vector<std::string> result;
+    std::stringstream ss(ports_str);
+    std::string item;
+    while (std::getline(ss, item, '|')) {
+        if (!item.empty()) {
+            result.push_back(item);
+        }
+    }
+    return result;
+}
+
+bool Serial::tryOpenPort(const std::string& port_name, int baud_rate) 
+{
     try{
-    serial_port_.open(config.portName);
-    serial_port_.set_option(serial_port_base::baud_rate(config.baudRate));
-    serial_port_.set_option(serial_port_base::character_size(8));
-    serial_port_.set_option(serial_port_base::parity(serial_port_base::parity::none));
-    serial_port_.set_option(serial_port_base::stop_bits(serial_port_base::stop_bits::one));
-    serial_port_.set_option(serial_port_base::flow_control(serial_port_base::flow_control::none));
-    int fd = serial_port_.native_handle();
-    termios options;
-    tcgetattr(fd, &options);
-
-    // 禁用缓冲
-    options.c_lflag &= ~ICANON;
-    options.c_lflag &= ~ECHO;
-    options.c_lflag &= ~ECHOE;
-    options.c_lflag &= ~ISIG;
-    options.c_oflag &= ~OPOST;
-
-    // 设置立即写入
-    options.c_cc[VMIN] = 1;
-    options.c_cc[VTIME] = 0;
-
-    tcsetattr(fd, TCSANOW, &options);
-    tcflush(fd, TCIOFLUSH);
+        serial_port_.open(port_name);
+        serial_port_.set_option(serial_port_base::baud_rate(baud_rate));
+        serial_port_.set_option(serial_port_base::character_size(8));
+        serial_port_.set_option(serial_port_base::parity(serial_port_base::parity::none));
+        serial_port_.set_option(serial_port_base::stop_bits(serial_port_base::stop_bits::one));
+        serial_port_.set_option(serial_port_base::flow_control(serial_port_base::flow_control::none));
+        int fd = serial_port_.native_handle();
+        termios options;
+        tcgetattr(fd, &options);
+    
+        // 禁用缓冲
+        options.c_lflag &= ~ICANON;
+        options.c_lflag &= ~ECHO;
+        options.c_lflag &= ~ECHOE;
+        options.c_lflag &= ~ISIG;
+        options.c_oflag &= ~OPOST;
+    
+        // 设置立即写入
+        options.c_cc[VMIN] = 1;
+        options.c_cc[VTIME] = 0;
+    
+        tcsetattr(fd, TCSANOW, &options);
+        tcflush(fd, TCIOFLUSH);
     }catch(const boost::system::system_error& e){
-        ERROR("Error during open serial port '{}': {}", config.portName, e.what());
+        ERROR("Error during open serial port '{}': {}", port_name, e.what());
+    }
+    if (serial_port_.is_open()) {
+        INFO("Serial port '{}' opened successfully.", port_name);
+        return true;
+    } else {
+        ERROR("Failed to open serial port '{}'.", port_name);
+        return false;
+    }
+}
+
+bool Serial::reconnectSerialPort() {
+    try {
+        if (serial_port_.is_open()) {
+            serial_port_.close();
+        }
+        for (const auto& port : available_ports_) {
+            if (tryOpenPort(port, baud_rate_)) {
+                INFO("Reconnected to serial port '{}'", port);
+                return true;
+            }
+        }
+    } catch (const boost::system::system_error& e) {
+        ERROR("Error during reconnecting serial port: {}", e.what());
+    }
+    return false;
+}
+
+void Serial::setSerialConfig(SerialConfig config) {
+    available_ports_ = splitPorts(config.portName);
+    baud_rate_ = config.baudRate;
+    if(available_ports_.empty()) {
+        ERROR("No available serial ports found.");
+        return;
+    }
+    for (const auto& port : available_ports_) {
+        if (tryOpenPort(port, config.baudRate)) {
+            INFO("Serial port '{}' opened successfully.", port);
+            break;
+        } else {
+            ERROR("Failed to open serial port '{}'.", port);
+        }
+    }
+    if (!serial_port_.is_open()) {
+        ERROR("Failed to open any serial port.");
+        return;
     }
 }
 
@@ -59,6 +119,17 @@ void Serial::runSerialThread() {
         startAsyncRead();
         io_context_.run();
     });
+    check_thread_ = std::thread([this]() {
+        while (running_) {
+            if (!serial_port_.is_open()) {
+                INFO("Serial port is closed, trying to reconnect...");
+                if (!reconnectSerialPort()) {
+                    ERROR("Failed to reconnect to serial port.");
+                }
+            }
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+    });
 }
 
 void Serial::stopSerialThread() {
@@ -67,6 +138,15 @@ void Serial::stopSerialThread() {
     if (serial_thread_.joinable()) {
         serial_thread_.join();
     }
+    if (check_thread_.joinable()) {
+        check_thread_.join();
+    }
+    try {
+        serial_port_.close();
+    } catch (const boost::system::system_error& e) {
+        ERROR("Error during close serial port: {}", e.what());
+    }
+
 }
 
 std::function<void(const serial::ControlResult&)> Serial::sendSerialFunc() {

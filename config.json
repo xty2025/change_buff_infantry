@@ -1,96 +1,57 @@
 {
     "car_name": "quanxiang",
-    "duolung" :
-    {   
-        "UDP": {
-            "enable": true,
-            "ip": "192.168.137.1",
-            "port": 4096
-        },
-        "X": 637.5,
-        "Y": 496.5,
-        "X1": -3.78e-6,
-        "Y1": 7.394e-4,
-        "X2": 7.266e-4,
-        "Y2": 3e-6,
-        "model_path": "../utils/models/armor_yolo_x.xml",
-        "serial_name": "/dev/ttyACM0",
-        "baud_rate": 115200,
-        "camera_id": "KE0200060399",
-        "exposure_time": 5000,
-        "camera_intrinsic_matrix": [
-            [1654.11137212488, 0, 637.460189924719],
-            [0, 1651.88235365380, 496.536024907796],
-            [0, 0, 1]
-        ],
-        "enemy_color" : "red",
-        "shoot_enable": true
-    },
     "quanxiang" :
     {
-        "tmp": {
-            "r": 0.27,
-            "dist": 5.0,
-            "omega": 180.0,
-            "pitch0": 3.5,
-            "pitch1": 3.5,
-            "max_theta_tol": 30.0,
-            "min_theta_tol": -60.0,
-            "shoot_yaw_tol": 0.5,
-            "shoot_pitch_tol": 2.0,
-            "flytime": 0.23,
-            "middle_yaw_tol": 0.5,
-            "pitch_offset": 3.2,
-            "clockwise": true
-        },
         "auto_white_balance": true,
         "web_debug": true,
-        "record_enable": false,
+        "record_enable": true,
         "UDP": {
             "enable": true,
-            "ip": "192.168.137.1",
+            "ip": "172.20.192.1",
             "port": 4096
         },
-        "armor_yaw_shoot_allow": 45.0,
-        "shoot_pitch_tol": 2.0,
-        "shoot_yaw_tol": 3.0,
-        "rotate_shoot_pitch_tol": 2.0,
-        "rotate_shoot_yaw_tol": 3.0,
-        "2m_highoffset": 0.00,
-        "5m_highoffset": 0.00,
-        "pitch_offset": 0,
-        "yaw_offset": -0.5,
-        "pitch_begin_offset": 1.0,
-        "high_offset": 0.0,
-        "X": 637.5,
-        "Y": 496.5,
-        "old":
+        "controller":
         {
-          "X1": -2.56666979e-05,
-          "Y1": 5.34894302e-04,
-          "X2": 5.26344368e-04,
-          "Y2": 2.81559875e-05
+            "armor_yaw_shoot_allow": 65.0,
+            "shoot_pitch_tol": 2.0,
+            "shoot_yaw_tol": 3.0,
+            "pitch_offset": 0,
+            "yaw_offset": 0.0,
+            "x_offset": 0.0,
+            "y_offset": 0.053,
+            "z_offset": 0.0,
+            "shoot_delay": 0.0,
+            "bullet_speed": 24.0,
+            "pic_camera_x": 640.0,
+            "pic_camera_y": 512.0,
+            "mouse_require": false
         },
-        "X1": -1.1057582434606322e-05,
-        "Y1": 0.0005689002206238117,
-        "X2": 0.0005263443676652912,
-        "Y2": 2.8155987489051654e-05,
-        "model_path": "../utils/models/armor_yolo_x.xml",
+        "solver":
+        {
+            "X": 637.5,
+            "Y": 496.5,
+            "X1": -1.1057582434606322e-05,
+            "Y1": 0.0005689002206238117,
+            "X2": 0.0005263443676652912,
+            "Y2": 2.8155987489051654e-05,
+            "pitch_offset": 0.0,
+            "camera_intrinsic_matrix": [
+                [1268.19886430029, 0, 630.954427985621],
+                [0, 1268.23774017347, 487.698003221433],
+                [0, 0, 1]
+            ],
+            "camera_distortion_matrix": [
+                -0.196854458412759, 0.0928923269301880, 0, 0, 0.0642790747423870
+            ]
+        },
+        "model_path": "../utils/models/BRpoints_nano.xml",
         "car_model_path": "../utils/models/yolo11n-416sgd4.xml",
-        "serial_name": "/dev/ttyACM0",
+        "serial_name": "/dev/ttyACM0|/dev/ttyACM1|/dev/ttyUSB0|/dev/ttyUSB1",
         "baud_rate": 115200,
-        "camera_id": "KE0200060397",
-        "exposure_time": 5000,
+        "camera_id": "auto",
+        "exposure_time": 3000,
         "gain": 12,
-        "camera_intrinsic_matrix": [
-            [1268.19886430029, 0, 630.954427985621],
-                             [0, 1268.23774017347, 487.698003221433],
-                             [0, 0, 1]
-        ],
-        "camera_distortion_matrix": [
-            -0.196854458412759, 0.0928923269301880, 0, 0, 0.0642790747423870
-        ],
-        "mouse_require": false,
+
         "enemy_color" : "red",
         "shoot_enable": false,
         "force_shoot" : false

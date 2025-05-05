@@ -2,8 +2,8 @@
 #include <Log/log.hpp>
 #include <opencv2/core/eigen.hpp>
 
-auto solver::createSolver(double X, double Y, double X1, double Y1, double X2, double Y2) -> std::shared_ptr<Solver> {
-    return std::make_unique<solver::Solver>(X, Y, X1, Y1, X2, Y2);
+auto solver::createSolver(param::Param json_param) -> std::shared_ptr<Solver> {
+    return std::make_unique<solver::Solver>(json_param);
 }
 
 namespace solver {
@@ -340,7 +340,18 @@ for (int i = 0; i < solutions; i++) {
     INFO("Solution {}: armor_yaw = {}, diff = {}, dist = {}", i, current_yaw, diff, dist);
 }
 
+    if((estimate_armor_yaw>0) && (armor_yaw<0)) {
+        armor_yaw = -armor_yaw;
+    }
+    else if((estimate_armor_yaw<0) && (armor_yaw>0))
+    {
+        armor_yaw = -armor_yaw;
+    }
+
     INFO("Selected armor_yaw: {}", armor_yaw);
+
+// 新的计算yaw的算法
+// 先计算在指定位置的像素反投影长度，再根据像素长度比计算角度
 
 
 
@@ -370,7 +381,7 @@ void Solver::setCameraOffset(const Eigen::Vector3d& cameraOffset) {
 void Solver::setDistorationCoefficients(const Eigen::Vector5d& distorationCoefficients) {
     this->distorationCoefficients = distorationCoefficients;
 }
-
-ImuData::ImuData(const ParsedSerialData& x) : pitch(x.pitch_now), yaw(x.yaw_now), roll(x.roll_now) {};
+double solver_pitch_offset = 0.0;
+ImuData::ImuData(const ParsedSerialData& x) : pitch(x.pitch_now + solver::solver_pitch_offset), yaw(x.yaw_now), roll(x.roll_now) {};
 
 } // namespace solver

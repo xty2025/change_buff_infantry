@@ -16,7 +16,7 @@ private:
     std::map<int, int> detect_count;//detected then set to 0, not detected then add 1, upper than 10 then delete.
     const int MaxMissFrame = 10;
     VectorY world2model(const VectorY& measure);
-    Prediction model2world(const VectorX& state, int carid, std::function<VectorY(const VectorX&, int)> measureFunc);
+    Prediction model2world(const VectorX& state, std::function<VectorY(const VectorX&, int)> measureFunc);
 public:
     std::function<Predictions(Time::TimeStamp)> predictFunc();
     Predictions predict(Time::TimeStamp timestamp);

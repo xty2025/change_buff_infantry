@@ -1,12 +1,11 @@
 #include "controller.hpp"
 #include <cmath>
 #include <Log/log.hpp>
-#include <Param/param.hpp>
 #include <Udpsend/udpsend.hpp>
 
-auto controller::createController() -> std::shared_ptr<controller::Controller>
+auto controller::createController(param::Param json_param) -> std::shared_ptr<controller::Controller>
 {
-    return std::make_unique<controller::Controller>();
+    return std::make_unique<controller::Controller>(json_param);
 }
 
 using namespace controller;
@@ -249,6 +248,23 @@ const int camera_halfheight=512;
     //return ControlResult();
 //}
 
+void Controller::readJsonParam()
+{
+    tol_pitch = json_param["shoot_pitch_tol"].Double();
+    tol_yaw = json_param["shoot_yaw_tol"].Double();
+    pitch_offset = json_param["pitch_offset"].Double();
+    yaw_offset = json_param["yaw_offset"].Double();
+    x_offset = json_param["x_offset"].Double();
+    y_offset = json_param["y_offset"].Double();
+    z_offset = json_param["z_offset"].Double();
+    armor_yaw_allow = json_param["armor_yaw_shoot_allow"].Double();
+    mouse_require = json_param["mouse_require"].Bool();
+    pic_camera_x = json_param["pic_camera_x"].Double();
+    pic_camera_y = json_param["pic_camera_y"].Double();
+    shootDelay = std::chrono::duration<double>(json_param["shoot_delay"].Double());
+    bullet_speed = json_param["bullet_speed"].Double();
+}
+
 static bool thetaInRange(double theta_deg, double range_deg)
 {
     theta_deg = std::remainder(theta_deg, 360.0);
@@ -258,35 +274,45 @@ static bool thetaInRange(double theta_deg, double range_deg)
         return false;
 } 
 
+bool Controller::judgeAimNew(bool request)
+{
+    aim_new = false;
+    if(((!aiming) && request) || (aiming && (!request)))
+    {
+        accumulate_aim_request++;
+    }
+    else
+    {
+        accumulate_aim_request = 0;
+    }
+    if(accumulate_aim_request > waitFrame)
+    {
+        accumulate_aim_request = 0;
+        aiming = request;
+        if(aiming)
+            aim_new = true;
+    }
+    return aim_new;
+}
+
 ControlResult Controller::control(const ParsedSerialData& parsedData)
 {
-    static Param param("../config.json");
-    static bool first_run = true;
-    static double tol_pitch = 0.0;
-    static double tol_yaw = 0.0;
-    static double pitch_offset = 0.0;
-    static double yaw_offset = 0.0;
-    static double high_offset = 0.0;
-    static double armor_yaw_allow = 45.0;
-    if(first_run)
+    if(judgeAimNew(parsedData.aim_request))
     {
-        param = param[param["car_name"].String()];
-        tol_pitch = param["shoot_pitch_tol"].Double();
-        tol_yaw = param["shoot_yaw_tol"].Double();
-        pitch_offset = param["pitch_offset"].Double();
-        yaw_offset = param["yaw_offset"].Double();
-        high_offset = param["high_offset"].Double();
-        armor_yaw_allow = param["armor_yaw_shoot_allow"].Double();
-        first_run = false;
+        aim_armor_id = std::make_pair(-1, -1);
     }
+
+
 
     ControlResult result;
     result.yaw_setpoint = parsedData.yaw_now;
     result.pitch_setpoint = parsedData.pitch_now;
+    result.pitch_actual_want = parsedData.pitch_now;
+    result.yaw_actual_want = parsedData.yaw_now;
     result.valid = false;
     result.shoot_flag = false;
 
-    Predictions predictions_for_time = predictFunc(Time::TimeStamp::now() + flyTime);
+    Predictions predictions_for_time = predictFunc(Time::TimeStamp::now() + flyTime + shootDelay);
     if (predictions_for_time.empty())
     {
         WARN("No prediction");
@@ -297,12 +323,22 @@ ControlResult Controller::control(const ParsedSerialData& parsedData)
     if (!is_valid_car_id)
     {
         WARN("Invalid car id");
-        //重新选择一个距离最近的
+        //重新选择一个相机距离最近的
         double min_distance = std::numeric_limits<double>::max();
         bool found = false;
+        location::Location tmp;
+        tmp.imu = ImuData(parsedData);
         for (const auto& prediction : predictions_for_time)
         {
-            double distance = sqrt(prediction.center.x * prediction.center.x + prediction.center.y * prediction.center.y);
+            double distance;
+            if(!mouse_require)
+                distance = prediction.center.x * prediction.center.x + prediction.center.y * prediction.center.y;
+            else
+            {
+                tmp.xyz_imu = prediction.center;
+                CXYD tmp_cxy = tmp.cxy;
+                distance = (tmp_cxy.cx - pic_camera_x) * (tmp_cxy.cx - pic_camera_x) + (tmp_cxy.cy - pic_camera_y) * (tmp_cxy.cy - pic_camera_y);
+            }
             if (distance < min_distance)
             {
                 min_distance = distance;
@@ -329,7 +365,7 @@ ControlResult Controller::control(const ParsedSerialData& parsedData)
     if (distance > 0.0)
     {
         flyTime = std::chrono::duration<double>(distance / bullet_speed);//粗略计算
-        predictions_for_time = predictFunc(Time::TimeStamp::now() + flyTime);
+        predictions_for_time = predictFunc(Time::TimeStamp::now() + flyTime + shootDelay);
     }
     it = std::find_if(predictions_for_time.begin(), predictions_for_time.end(),
         [&](const auto& prediction) { return prediction.id == aim_armor_id.first; });
@@ -346,11 +382,21 @@ ControlResult Controller::control(const ParsedSerialData& parsedData)
         //重新选择一个距离最近的
         double min_distance = std::numeric_limits<double>::max();
         bool found = false;
+        location::Location tmp;
+        tmp.imu = ImuData(parsedData);
         for (const auto& armor : it->armors)
         {
             if (armor.status == Armor::AVAILABLE)
             {
-                double distance = sqrt(armor.center.x * armor.center.x + armor.center.y * armor.center.y);
+                double distance;
+                if(!mouse_require)
+                    distance = armor.center.x * armor.center.x + armor.center.y * armor.center.y;
+                else
+                {
+                    tmp.xyz_imu = armor.center;
+                    CXYD tmp_cxy = tmp.cxy;
+                    distance = (tmp_cxy.cx - pic_camera_x) * (tmp_cxy.cx - pic_camera_x) + (tmp_cxy.cy - pic_camera_y) * (tmp_cxy.cy - pic_camera_y);
+                }
                 if (distance < min_distance)
                 {
                     min_distance = distance;
@@ -366,7 +412,7 @@ ControlResult Controller::control(const ParsedSerialData& parsedData)
             double pitch = 0.0;
             double yaw = 0.0;
             double time = 0.0;
-            bool success = calcPitchYaw(pitch, yaw, time, it->center.x, it->center.y, it->center.z);
+            bool success = calcPitchYaw(pitch, yaw, time, it->center.x + x_offset, it->center.y + y_offset, it->center.z + z_offset);
             if (!success)
             {
                 WARN("calcPitchYaw failed");
@@ -375,6 +421,8 @@ ControlResult Controller::control(const ParsedSerialData& parsedData)
             result.pitch_setpoint = pitch * 180 / PI;
             result.yaw_setpoint = yaw * 180 / PI;
             result.yaw_setpoint = parsedData.yaw_now + std::remainder(result.yaw_setpoint - parsedData.yaw_now, 360.0);
+            result.pitch_actual_want = result.pitch_setpoint;
+            result.yaw_actual_want = result.yaw_setpoint;
             result.valid = true;
             result.shoot_flag = false;
             flyTime = std::chrono::duration<double>(time);
@@ -394,18 +442,18 @@ ControlResult Controller::control(const ParsedSerialData& parsedData)
     double pitch = 0.0;
     double yaw = 0.0;
     double time = 0.0;
-    if (!calcPitchYaw(pitch, yaw, time, armor_it->center.x, armor_it->center.y, armor_it->center.z))
+    if (!calcPitchYaw(pitch, yaw, time, armor_it->center.x + x_offset, armor_it->center.y + y_offset, armor_it->center.z + z_offset))
     {
         WARN("calcPitchYaw failed");
         return result;
     }
-    result.pitch_setpoint = pitch * 180 / PI;
-    result.yaw_setpoint = yaw * 180 / PI;
+    result.pitch_setpoint = pitch * 180 / PI + pitch_offset;
+    result.yaw_setpoint = yaw * 180 / PI + yaw_offset;
     result.yaw_setpoint = parsedData.yaw_now + std::remainder(result.yaw_setpoint - parsedData.yaw_now, 360.0);
     result.valid = true;
 
     double armor_yaw_now = armor_it->yaw * 180 / PI - parsedData.yaw_now;
-    if(thetaInRange(armor_yaw_now, armor_yaw_allow))
+    if(thetaInRange(armor_yaw_now, armor_yaw_allow)&&it->stable)
     {
         result.shoot_flag = true;
     }
@@ -415,6 +463,31 @@ ControlResult Controller::control(const ParsedSerialData& parsedData)
         result.shoot_flag = false;
     }
 
+    //calc actual want with no shootDelay
+    //i.e. ignore motion time delay
+    predictions_for_time = predictFunc(Time::TimeStamp::now() + flyTime);
+    auto actual_car_it = std::find_if(predictions_for_time.begin(), predictions_for_time.end(),
+        [&](const auto& prediction) { return prediction.id == aim_armor_id.first; });
+    auto actual_armor_it = std::find_if(actual_car_it->armors.begin(), actual_car_it->armors.end(),
+        [&](const auto& armor) { return armor.id == aim_armor_id.second; });
+    if(!calcPitchYaw(pitch, yaw, time, actual_armor_it->center.x + x_offset, actual_armor_it->center.y + y_offset, actual_armor_it->center.z + z_offset))
+    {
+        WARN("calcPitchYaw failed");
+        result.shoot_flag = false;
+        return result;
+    }
+    else
+    {
+        result.yaw_actual_want = yaw * 180 / PI + yaw_offset;
+        result.pitch_actual_want = pitch * 180 / PI + pitch_offset;
+        result.yaw_actual_want = parsedData.yaw_now + std::remainder(result.yaw_actual_want - parsedData.yaw_now, 360.0);
+        if(abs(result.yaw_actual_want - parsedData.yaw_now) > tol_yaw||
+           abs(result.pitch_actual_want - parsedData.pitch_now) > tol_pitch)
+        {
+            WARN("not in tolerance, cancel shoot");
+            result.shoot_flag = false;
+        }
+    }
     return result;
 }
 

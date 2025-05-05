@@ -1,7 +1,9 @@
 #include "type.hpp"
 #include "driver/type.hpp"
 #include "predictor/type.hpp"
+#include "solver/type.hpp"
 #include "TimeStamp/TimeStamp.hpp"
+#include "Param/param.hpp"
 
 
 namespace controller
@@ -10,6 +12,7 @@ namespace controller
     using predictor::Prediction;
     using predictor::Predictions;
     using driver::ParsedSerialData;
+    using solver::ImuData;
     const double PI = 3.1415926;
     const double GRAVITY = 9.794;
     const double C_D = 0.42;
@@ -17,24 +20,40 @@ namespace controller
     class Controller 
     {
     public:
+        Controller(param::Param& json_param) : json_param(json_param) {readJsonParam();}
         void registPredictFunc(std::function<Predictions(Time::TimeStamp)> predictFunc);
         ControlResult control(const ParsedSerialData& parsedData);
     private:
+        void readJsonParam(void);
         std::function<Predictions(Time::TimeStamp)> predictFunc;
+        param::Param json_param;
         bool aim_new = false;
+        bool aiming = false;
         const int waitFrame = 5;
-        int aim_want = - waitFrame;
-        int old_aim_want = - waitFrame;
+        int accumulate_aim_request = 0;
         std::pair<int, int> aim_armor_id = {-1, -1};//(car, armor)
         int max_iter = 100;
         double tol = 1e-6;
-        double bullet_speed = 24.5;
         double bullet_mass = 3.2e-3;
         double bullet_diameter = 16.8e-3;
+        bool judgeAimNew(bool request);
         bool calcPitchYaw(double& pitch, double& yaw, double& time, double target_x, double target_y, double target_z);
-        std::chrono::duration<double> shootDelay = 0.1s;
         std::chrono::duration<double> flyTime = 0.0s;
+
+        double bullet_speed = 24.5;
+        std::chrono::duration<double> shootDelay = 0.1s;
+        double tol_pitch = 0.0;
+        double tol_yaw = 0.0;
+        double pitch_offset = 0.0;
+        double yaw_offset = 0.0;
+        double x_offset = 0.0;
+        double y_offset = 0.0;
+        double z_offset = 0.0;
+        double armor_yaw_allow = 45.0;
+        bool mouse_require = false;
+        double pic_camera_x = 640.0; //图传模块中心点在相机坐标系中的坐标
+        double pic_camera_y = 512.0; //图传模块中心点在相机坐标系中的坐标
     };
 
-    std::shared_ptr<Controller> createController();    
+    std::shared_ptr<Controller> createController(param::Param json_param);
 } // namespace controller

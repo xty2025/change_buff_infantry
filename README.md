@@ -1,5 +1,5 @@
 # AutoAim
-version 0.0.2(unfinished)
+version 1.0(unfinished)
 
 **可使用WSL2运行+调试功能**
 

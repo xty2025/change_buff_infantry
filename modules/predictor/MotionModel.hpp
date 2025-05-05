@@ -50,7 +50,7 @@ struct stateTransFunc{
     }
     double dt;
     void setDt(double dt){
-        this->dt = dt ;
+        this->dt = dt;
     }
 };
 //measure: ax,ay,az,tangent,angle_left,angle_right
@@ -119,8 +119,8 @@ struct measureFunc{
     int total_id1 = -1;
     int total_id2 = -1;
     bool mode = false;
-    void setId(int id){
-        this->id = id;
+    void setId(int id_){
+        this->id = id_;
     }
     //mode = true: Update Mode
     //mode = false: Predict Mode 
@@ -136,7 +136,8 @@ struct measureFunc{
             if((id2 - id1 + 4) % 4 != 1)
             {
                 std::cout << "id2 - id1 != 1" << std::endl;
-                throw std::runtime_error("id2 - id1 != 1 in setVisibleId");
+                ERROR("id2 - id1 != 1 in setVisibleId");
+                //throw std::runtime_error("id2 - id1 != 1 in setVisibleId");
             }
         }
         this->total_id1 = id1;
@@ -162,7 +163,8 @@ public:
         return measure_vec;
     }
     void Update(const VectorY& measure, const Time::TimeStamp& timestamp, int armor_id);
-    bool Stable() const { return true; }
+    bool Stable() const { return whole_car_stable; }
+    bool armorStable() const { return armor_stable; }
     void setUpdateTotalId(int id1, int id2=-1){
         this->id1 = id1;
         this->id2 = id2;
@@ -173,6 +175,8 @@ public:
         id2 = -1;
     }
 private:
+    bool whole_car_stable = true;
+    bool armor_stable = false;
     int id1 = -1;
     int id2 = -1;
     VectorX first_state_estimate(const VectorY& measure, const int armor_id)

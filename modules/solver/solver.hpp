@@ -6,12 +6,13 @@
 #include "driver/type.hpp"
 #include "Location/location.hpp"
 #include "tracker/type.hpp"
+#include "Param/param.hpp"
 
 
 namespace solver {
 	using driver::ParsedSerialData;
 	using tracker::ArmorXYV;
-
+    extern double solver_pitch_offset;
 class Solver : public BaseSolver
 {
 private:
@@ -23,15 +24,34 @@ private:
 public:
 	static double X ,Y;  // center of the image
 	static double X1 ,Y1 ,X2 ,Y2;
-	explicit Solver(double _X, double _Y, double _X1, double _Y1, double _X2, double _Y2)
-	{
-		X = _X;
-		Y = _Y;
-		X1 = _X1;
-		Y1 = _Y1;
-		X2 = _X2;
-		Y2 = _Y2;
-	};
+    //static double yaw_offset;
+//	explicit Solver(double _X, double _Y, double _X1, double _Y1, double _X2, double _Y2)
+//	{
+//		X = _X;
+//		Y = _Y;
+//		X1 = _X1;
+//		Y1 = _Y1;
+//		X2 = _X2;
+//		Y2 = _Y2;
+//	};
+    explicit Solver(param::Param& json_param)
+    {
+        X = json_param["X"].Double();
+        Y = json_param["Y"].Double();
+        X1 = json_param["X1"].Double();
+        Y1 = json_param["Y1"].Double();
+        X2 = json_param["X2"].Double();
+        Y2 = json_param["Y2"].Double();
+        solver_pitch_offset = json_param["pitch_offset"].Double();
+        // Load camera intrinsic matrix from parameter file
+        auto intrinsicArray = json_param["camera_intrinsic_matrix"].to<std::vector<std::vector<double>>>();
+        for (int i = 0; i < 3; ++i)
+            for (int j = 0; j < 3; ++j)
+                cameraIntrinsicMatrix(i, j) = intrinsicArray[i][j];
+        auto distortionCoefficientsArray = json_param["camera_distortion_matrix"].to<std::vector<double>>();
+        for (int i = 0; i < 5; ++i)
+            distorationCoefficients(i) = distortionCoefficientsArray[i];
+    }
     
 	inline PYD XYZ2PYD(const XYZ& in) const override
 	{
@@ -58,10 +78,12 @@ public:
 	}
 	inline CXYD PYD2CXYD(const PYD& in) const override
 	{
+		double pitch = std::remainder(in.pitch, 2 * M_PI);
+		double yaw = std::remainder(in.yaw, 2 * M_PI);
 		CXYD out;
 		double det = X1 * Y2 - Y1 * X2;
-		out.cx = X - (Y2 * in.pitch - Y1 * in.yaw) / det;
-		out.cy = Y - (-X2 * in.pitch + X1 * in.yaw) / det;
+		out.cx = X - (Y2 * pitch - Y1 * yaw) / det;
+		out.cy = Y - (-X2 * pitch + X1 * yaw) / det;
 		out.distance = in.distance;
 		return out;
 	}
@@ -89,6 +111,6 @@ public:
     void setCameraOffset(const Eigen::Vector3d& cameraOffset);
     void setDistorationCoefficients(const Eigen::Vector5d& distorationCoefficients);
 };
-std::shared_ptr<Solver> createSolver(double X, double Y, double X1, double Y1, double X2, double Y2);
+std::shared_ptr<Solver> createSolver(param::Param json_param);
 
 } // namespace solver

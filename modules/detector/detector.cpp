@@ -66,7 +66,8 @@ namespace detector
             // 复制其他属性
             result.tag_id = det.tag_id;
             result.score = det.confidence;
-            result.isGray = det.color_id/2 == 2;
+            result.isGray = false;
+            //result.isGray = det.color_id/2 == 2;
         }
         
         // 等待车辆检测完成并处理结果
@@ -87,9 +88,9 @@ namespace detector
 
             // 在image上绘制检测框
             cv::rectangle(image, det.rect, cv::Scalar(0, 255, 0), 2);
-            std::string label = "Class: " + std::to_string(det.class_id) + " " + std::to_string(det.confidence).substr(0, 4);
-            int baseline = 0;
-            cv::Size label_size = cv::getTextSize(label, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseline);
+            //std::string label = "Class: " + std::to_string(det.class_id) + " " + std::to_string(det.confidence).substr(0, 4);
+            //int baseline = 0;
+            //cv::Size label_size = cv::getTextSize(label, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseline);
         }
         INFO("find {} yolo detections", car_detections.size());
         INFO("find {} armor detections", detections.size());
