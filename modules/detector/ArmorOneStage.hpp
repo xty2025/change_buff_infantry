@@ -11,7 +11,7 @@ namespace detector
     class ArmorOneStage
     {
     public:
-        explicit ArmorOneStage(const std::string &model_file,bool allowGray = true);
+        explicit ArmorOneStage(const std::string &model_file,bool useOldModel = false,bool allowGray = true);
 
         ~ArmorOneStage();
 
@@ -23,6 +23,21 @@ namespace detector
             {
                 this->color_flag = 1;
                 std::cout << "ENEMY RED" << std::endl;
+            }
+            else if(flag_ == 1)
+            {
+                this->color_flag = 0;
+                std::cout << "ENEMY BLUE" << std::endl;
+            }
+            else if(flag_ == -2)
+            {
+                this->color_flag = -2;
+                std::cout << "ENEMY ALL (EXPERIMENTAL)" << std::endl;
+            }
+            else if(flag_ == -3)
+            {
+                this->color_flag = -3;
+                std::cout << "ENEMY R&B (EXPERIMENTAL)" << std::endl;
             }
             else
             {

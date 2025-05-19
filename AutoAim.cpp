@@ -27,7 +27,9 @@ using namespace recording;
 std::map<std::string, int> enemyTrans = {
     {"red", 0},
     {"blue", 1},
-    {"auto", -1}
+    {"auto", -1},
+    {"all", -2},
+    {"r&b", -3}
 };
 
 int main() {
@@ -56,7 +58,8 @@ int main() {
     auto solver = createSolver(param["solver"]);
     auto controller = createController(param["controller"]);
     auto predictor = createPredictor();
-    auto detector = createDetector(param["model_path"].String(), param["car_model_path"].String(), false);
+    //auto detector = createDetector(param["model_path"].String(), param["car_model_path"].String(), false);
+    auto detector = createDetector(param["detector"], false);
     auto tracker = createTracker();
 
 
@@ -147,16 +150,16 @@ int main() {
             auto it = std::find_if(trackResults.second.begin(), trackResults.second.end(), [&trackResult](const auto& armor) {
                 return armor.car_id == trackResult.car_id;
             });
-            PYD pyd_imu;
+            XYZ xyz_imu;
             double yaw = 0;
             if(it == trackResults.second.end())
-                std::tie(pyd_imu, yaw) = solver->camera2world(trackResult.armor, imu_data, trackResult.car_id == 1);
+                std::tie(xyz_imu, yaw) = solver->camera2world(trackResult.armor, imu_data, trackResult.car_id == 1);
             else
             {
-                std::tie(pyd_imu, yaw) = solver->camera2worldWithWholeCar(trackResult.armor, imu_data, it->bounding_rect, trackResult.car_id == 1);
+                std::tie(xyz_imu, yaw) = solver->camera2worldWithWholeCar(trackResult.armor, imu_data, it->bounding_rect, trackResult.car_id == 1);
             }
             trackResult.location.imu = imu_data;
-            trackResult.location.pyd_imu = pyd_imu;
+            trackResult.location.xyz_imu = xyz_imu;
             //XYZ tmp = trackResult.location.xyz_imu;
             //trackResult.location.xyz_imu = tmp; 
             trackResult.yaw = yaw;
@@ -174,6 +177,15 @@ int main() {
             cv::putText(frame->image, text, cv::Point(coord.cx, coord.cy), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 255), 2);
             std::string text_id = std::to_string(trackResult.armor_id);
             cv::putText(frame->image, text_id, cv::Point(coord.cx, coord.cy+10), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 0, 255), 2);
+            XYZ armor_center = trackResult.location.xyz_imu;
+            cv::circle(frame->image, cv::Point2f(500-armor_center.y*100.0, 500-armor_center.x*100.0)
+                , 5, cv::Scalar(0, 0, 255), -1);
+            double k = tan(yaw);
+            double dx = 10/sqrt(1+k*k);
+            double dy = k*dx;
+            cv::line(frame->image,cv::Point2f(500-armor_center.y*100.0 +dx, 500-armor_center.x*100.0 - dy),
+                     cv::Point2f(500-armor_center.y*100.0 - dx, 500-armor_center.x*100.0 + dy), cv::Scalar(0, 0, 255), 2);
+
         }
         //visualize trackResults on frame
         for(auto& trackResult : trackResults.second)
@@ -204,13 +216,15 @@ int main() {
             UdpSend::sendData((float)prediction.vx);
             UdpSend::sendData((float)prediction.vy);
             UdpSend::sendData((float)prediction.theta);
+
+
             INFO("ENTER center: x: {}, y: {}, z: {}", center.x, center.y, center.z);
             //trans to CXYD
             location::Location temp;
             temp.imu = imu_data;
             temp.xyz_imu = center;
             CXYD coord = temp.cxy;
-            INFO("ENTER coord: cx: {}, cy: {}, distance: {}", coord.cx, coord.cy, coord.distance);
+            INFO("ENTER coord: cx: {}, cy: {}", coord.cx, coord.cy);
             cv::circle(frame->image, cv::Point(coord.cx, coord.cy), 8, cv::Scalar(200, 200, 200), -1);
             for(auto& armor : prediction.armors)
             {
@@ -229,8 +243,20 @@ int main() {
                 cv::putText(frame->image, text, cv::Point(armor_coord.cx, armor_coord.cy), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 255), 2);
                 std::string text_id = std::to_string(armor.id);
                 cv::putText(frame->image, text_id, cv::Point(armor_coord.cx, armor_coord.cy+10), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 0, 255), 2);
+            
+                
+                cv::circle(frame->image, cv::Point2f(500-armor_center.y*100.0, 500-armor_center.x*100.0)
+                , 5, cv::Scalar(255, 255, 255), -1);
+                double k = tan(armor.yaw);
+                double dx = 10/sqrt(1+k*k);
+                double dy = k*dx;
+                cv::line(frame->image,cv::Point2f(500-armor_center.y*100.0 +dx, 500-armor_center.x*100.0 - dy),
+                    cv::Point2f(500-armor_center.y*100.0 - dx, 500-armor_center.x*100.0 + dy), cv::Scalar(255, 255, 255), 2);
             }
         }
+        //draw cross on (500, 500)
+        cv::line(frame->image, cv::Point(500-10, 500), cv::Point(500+10, 500), cv::Scalar(0, 255, 0), 4);
+        cv::line(frame->image, cv::Point(500, 500-10), cv::Point(500, 500+10), cv::Scalar(0, 255, 0), 4);
         int count_armor_debug = 0;
         if(show)
         for(auto& trackResult : trackResults.first)
@@ -257,12 +283,14 @@ int main() {
         if(record_enable)
         {
             INFO("ADD FRAME");
-            while(camera_data_pack.size() > 0)
-            {
-                auto camera_data = camera_data_pack.front();
-                camera_data_pack.pop();
-                Recorder::instance().addFrame(camera_data);
-            }
+            // while(camera_data_pack.size() > 0)
+            // {
+            //     auto camera_data = camera_data_pack.front();
+            //     camera_data_pack.pop();
+            //     Recorder::instance().addFrame(camera_data);
+            // }
+            //debug mode
+            Recorder::instance().addFrame(frame);
             INFO("FINISH FRAME");
 
         }

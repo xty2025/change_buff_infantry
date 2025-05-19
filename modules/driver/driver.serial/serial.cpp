@@ -88,6 +88,22 @@ bool Serial::reconnectSerialPort() {
     return false;
 }
 
+bool Serial::getNewestSerialData(ParsedSerialData& serial_data)
+{
+    std::lock_guard<std::mutex> lock(serial_data_mutex_);
+    if (serial_data_queue_.empty()) {
+        return false;  // No data available
+    }
+    serial_data = serial_data_queue_.back();
+    return true;
+}
+
+void Serial::sendSerialData(const ControlResult& control_result)
+{
+    static auto send_func = sendSerialFunc();
+    send_func(control_result);
+}
+
 void Serial::setSerialConfig(SerialConfig config) {
     available_ports_ = splitPorts(config.portName);
     baud_rate_ = config.baudRate;

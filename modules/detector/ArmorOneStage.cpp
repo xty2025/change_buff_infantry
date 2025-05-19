@@ -4,26 +4,30 @@
 #include "TimeStamp/TimeStamp.hpp"
 #include "Log/log.hpp"
 
-#define USE_OLD_MODEL false
+//#define USE_OLD_MODEL false
 
 namespace detector
 {
     //params
+    static bool useOldModel = false;
     static constexpr int INPUT_W = 416;   // Width of input
     static constexpr int INPUT_H = 416;   // Height of input
-//    static constexpr int NUM_CLASSES = 8; // Number of classes
-//    static constexpr int NUM_COLORS = 8;  // Number of color
-    static constexpr int NUM_CLASSES = USE_OLD_MODEL? 8 : 1;
-    static constexpr int NUM_COLORS = USE_OLD_MODEL? 8 : 2;  // Number of color
+    static int NUM_CLASSES = 8; // Number of classes
+    static int NUM_COLORS = 8;  // Number of color
+//    static int NUM_CLASSES = USE_OLD_MODEL? 8 : 1;
+//    static int NUM_COLORS = USE_OLD_MODEL? 8 : 2;  // Number of color
     static constexpr int TOPK = 128;      // TopK
     static constexpr float NMS_THRESH = 0.3;
     static constexpr float BBOX_CONF_THRESH = 0.5;
     static constexpr float MERGE_CONF_ERROR = 0.15;
     static constexpr float MERGE_MIN_IOU = 0.9;
 
-    ArmorOneStage::ArmorOneStage(const std::string &model_file, bool allowGray)
+    ArmorOneStage::ArmorOneStage(const std::string &model_file, bool useOldModel_, bool allowGray)
         : allowGray(allowGray)
     {
+        useOldModel = useOldModel_;
+        NUM_CLASSES = useOldModel ? 8 : 1;
+        NUM_COLORS = useOldModel ? 8 : 2;
         initModel(model_file);
         number_classifier = std::make_unique<NumberClassifier>("svm");
     }
@@ -159,8 +163,26 @@ namespace detector
                 bbox.confidence = box_prob;
                 bbox.area = bbox.rect.area();
                 //if(box_color/2 == color_flag )//|| (allowGray && (box_color/2 == 2)))
-                if(((!USE_OLD_MODEL) && (box_color == color_flag) )||(USE_OLD_MODEL&&(box_color/2 == color_flag)))
-                {
+//                if((color_flag == -2 )||
+//                ((color_flag == -3) && ((useOldModel && ((box_color/2 == 0)||(box_color/2 == 1)))||((!useOldModel) && ((box_color ==0)||(box_color ==1)))))||
+//                ((!useOldModel) && (box_color == color_flag) )||
+//                (useOldModel&&(box_color/2 == color_flag)))
+//                {
+//                    bboxes.push_back(bbox);
+//                }
+                bool should_add = false;
+                if (color_flag == -2) {
+                    should_add = true; // Match all colors
+                } else {
+                    int effective_box_color = useOldModel ? (box_color / 2) : box_color;
+                    if (color_flag == -3) {
+                        should_add = (effective_box_color == 0) || (effective_box_color == 1);
+                    } else {
+                        should_add = (effective_box_color == color_flag);
+                    }
+                }
+
+                if (should_add) {
                     bboxes.push_back(bbox);
                 }
             }
@@ -332,7 +354,7 @@ namespace detector
                 (*bbox).center=((*bbox).corners[0]+(*bbox).corners[1]+(*bbox).corners[2]+(*bbox).corners[3])/4;
             }
 
-            USE_OLD_MODEL?(std::swap((*bbox).corners[1],(*bbox).corners[3]),1):0;
+            useOldModel?(std::swap((*bbox).corners[1],(*bbox).corners[3]),1):0;
             
             // 检查角点是否在图像范围内
             bool valid_corners = true;

@@ -1,40 +1,27 @@
 {
-    "car_name": "quanxiang",
-    "quanxiang" :
+    "car_name": "chuan",
+    "chuan" :
     {
         "auto_white_balance": true,
         "web_debug": true,
         "record_enable": true,
         "UDP": {
-            "enable": true,
+            "enable": false,
             "ip": "172.20.192.1",
             "port": 4096
         },
         "controller":
         {
-            "armor_yaw_shoot_allow": 65.0,
-            "shoot_pitch_tol": 2.0,
-            "shoot_yaw_tol": 3.0,
-            "pitch_offset": 0,
-            "yaw_offset": 0.0,
-            "x_offset": 0.0,
-            "y_offset": 0.053,
-            "z_offset": 0.0,
+            "gun_offset": [107, 0, 0],
             "shoot_delay": 0.0,
-            "bullet_speed": 24.0,
             "pic_camera_x": 640.0,
             "pic_camera_y": 512.0,
             "mouse_require": false
         },
         "solver":
         {
-            "X": 637.5,
-            "Y": 496.5,
-            "X1": -1.1057582434606322e-05,
-            "Y1": 0.0005689002206238117,
-            "X2": 0.0005263443676652912,
-            "Y2": 2.8155987489051654e-05,
-            "pitch_offset": 0.0,
+            "camera_offset": [153,-50.1,-3.69],
+            "camera_rotation": [0, 0, 0],
             "camera_intrinsic_matrix": [
                 [1268.19886430029, 0, 630.954427985621],
                 [0, 1268.23774017347, 487.698003221433],
@@ -44,16 +31,21 @@
                 -0.196854458412759, 0.0928923269301880, 0, 0, 0.0642790747423870
             ]
         },
-        "model_path": "../utils/models/BRpoints_nano.xml",
-        "car_model_path": "../utils/models/yolo11n-416sgd4.xml",
+        "detector":
+        {
+            "model_path": "../utils/models/BRpoints_nano.xml",
+            "use_old_model": false,
+            "car_model_path": "../utils/models/yolo11n-416sgd4.xml"
+        },
+
         "serial_name": "/dev/ttyACM0|/dev/ttyACM1|/dev/ttyUSB0|/dev/ttyUSB1",
         "baud_rate": 115200,
         "camera_id": "auto",
-        "exposure_time": 3000,
-        "gain": 12,
+        "exposure_time": 4000,
+        "gain": 16,
 
-        "enemy_color" : "red",
-        "shoot_enable": false,
+        "enemy_color" : "all",
+        "shoot_enable": true,
         "force_shoot" : false
     }
 }

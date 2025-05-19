@@ -1,5 +1,6 @@
 #include "tracker.hpp"
 #include "TrackerMatcher.hpp"
+#include "TrackerMatcherWithWholeCar.hpp"
 #include "Log/log.hpp"
 
 auto tracker::createTracker() -> std::unique_ptr<Tracker> {
@@ -378,11 +379,72 @@ CarTrackResults Tracker::getCarTrackResult(const Time::TimeStamp& time, const Im
     return results;
 }
 
+inline cv::Point2f XYV2Point2f(const XYV& xyv)
+{
+    return cv::Point2f(xyv.x, xyv.y);
+}
+
+TrackResults Tracker::initArmorTrackResult(const ImuData& imu)
+{
+    if(armors.empty()) return TrackResults();
+    TrackResults results;
+    TrackResult temp;
+    for(auto& armor: armors)
+    {
+        temp.armor = armor.first;
+        temp.rect = cv::boundingRect(std::vector<cv::Point2f>{
+            XYV2Point2f(armor.first[0]),
+            XYV2Point2f(armor.first[1]),
+            XYV2Point2f(armor.first[2]),
+            XYV2Point2f(armor.first[3])
+        });
+        temp.location.imu = imu;
+        temp.location.cxy = {(armor.first[0].x + armor.first[1].x + armor.first[2].x + armor.first[3].x) / 4,
+            (armor.first[0].y + armor.first[1].y + armor.first[2].y + armor.first[3].y) / 4};
+        temp.car_id = armor.second;
+        results.push_back(temp);
+    }
+
+    return results;
+}
+
+std::map<int, MatcherWholeCar> matcher_whole_cars;
+
+void Tracker::getArmorTrackResultWithWholeCar(const Time::TimeStamp& time, const ImuData& imu, const CarTrackResults& car_results, TrackResults& armor_results)
+{
+    std::map<int,std::vector<std::tuple<CXYD,cv::Rect2f,TrackResult*>>> params;//(car_id, centers)
+    for(auto& armor : armor_results) {
+        //search in carTrackResults
+        auto it = std::find_if(car_results.begin(), car_results.end(), [&](const auto& car_result) {
+            return car_result.car_id == armor.car_id;
+        });
+        if(it == car_results.end()) {
+            continue; // 如果没有找到对应的车辆，跳过
+        }
+        params[armor.car_id].push_back(std::make_tuple(armor.location.cxy, it->bounding_rect, &armor));
+    }
+
+    for(auto& [car_id, param] : params) {
+        if(matcher_whole_cars.find(car_id) == matcher_whole_cars.end()) {
+            matcher_whole_cars.emplace(car_id, MatcherWholeCar());
+        }
+        auto result = matcher_whole_cars[car_id].track(param, time);
+        if(result.size() != param.size()) {
+            ERROR("TrackerMatcher error: result size not equal to center size");
+            continue;
+        }
+        for(auto& [id, trackresult_ptr] : result) {
+            trackresult_ptr->armor_id = id;
+        }
+    }
+}
 
 TrackResultPairs Tracker::getTrackResult(const Time::TimeStamp& time, const ImuData& imu) 
 {
-    auto armor_results = getArmorTrackResult(time, imu);
+    auto armor_results = initArmorTrackResult(imu);
+    //auto armor_results = getArmorTrackResult(time, imu);
     auto car_results = getCarTrackResult(time, imu, armor_results);
+    getArmorTrackResultWithWholeCar(time, imu, car_results, armor_results);
     armors.clear();  // 清空当前帧的装甲板
     armors_gray.clear();
     return std::make_pair(armor_results, car_results);

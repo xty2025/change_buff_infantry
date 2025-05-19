@@ -40,7 +40,10 @@ namespace controller
         bool calcPitchYaw(double& pitch, double& yaw, double& time, double target_x, double target_y, double target_z);
         std::chrono::duration<double> flyTime = 0.0s;
 
-        double bullet_speed = 24.5;
+        double bullet_speed = 23.0;
+        const double min_bullet_speed = 20.0;
+        const double bullet_speed_alpha = 0.5;
+
         std::chrono::duration<double> shootDelay = 0.1s;
         double tol_pitch = 0.0;
         double tol_yaw = 0.0;

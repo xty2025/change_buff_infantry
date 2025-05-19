@@ -7,6 +7,16 @@ auto driver::createDriver() -> std::unique_ptr<Driver>
     return std::make_unique<driver::Driver>(createSerial(), createCamera()); 
 }
 
+bool Driver::getNewestSerialData(ParsedSerialData& serial_data)
+{
+    return this->serial->getNewestSerialData(serial_data);
+}
+
+void Driver::sendSerialData(const ControlResult& control_result)
+{
+    this->serial->sendSerialData(control_result);
+}
+
 void Driver::setSerialConfig(SerialConfig config)
 {
     this->serial->setSerialConfig(config);
@@ -15,6 +25,11 @@ void Driver::setSerialConfig(SerialConfig config)
 void Driver::setCameraConfig(CameraConfig config)
 {
     this->camera->setCameraConfig(config);
+}
+
+void Driver::setCameraExposureTime(int exposure_time)
+{
+    this->camera->setCameraExposureTime(exposure_time);
 }
 
 std::function<void(const ControlResult&)> Driver::sendSerialFunc()

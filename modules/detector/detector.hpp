@@ -2,6 +2,7 @@
 #include "ArmorOneStage.hpp"
 #include "YoloDetector.hpp"
 #include "type.hpp"
+#include "Param/param.hpp"
 #include <future>
 
 
@@ -10,16 +11,18 @@ namespace detector
     class Detector
     {
     private:
-        std::string model_path;
+        std::string armor_model_path;
         std::string car_model_path;
+        bool useOldModel = false;
         std::unique_ptr<ArmorOneStage> armor_one_stage_inferer;
         std::unique_ptr<YoloDetector> yolo_detector;
     public:
-        explicit Detector(const std::string &armor_model_path, const std::string &car_model_path, bool allowGray = true) : 
-            model_path(armor_model_path),
-            car_model_path(car_model_path)
+        explicit Detector(param::Param json_param, bool allowGray = true)
         {
-            armor_one_stage_inferer = std::make_unique<ArmorOneStage>(armor_model_path, allowGray);
+            armor_model_path = json_param["model_path"].String();
+            car_model_path = json_param["car_model_path"].String();
+            useOldModel = json_param["use_old_model"].Bool();
+            armor_one_stage_inferer = std::make_unique<ArmorOneStage>(armor_model_path, useOldModel, allowGray);
             yolo_detector = std::make_unique<YoloDetector>(car_model_path);
         }
         ~Detector() {}
@@ -30,5 +33,5 @@ namespace detector
             armor_one_stage_inferer->setColorFlag(flag);
         }
     };
-    std::unique_ptr<Detector> createDetector(const std::string &armor_model_path, const std::string &car_model_path, bool allowGray = true);
+    std::unique_ptr<Detector> createDetector(param::Param json_param, bool allowGray = true);
 } // namespace detector

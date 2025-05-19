@@ -58,6 +58,7 @@ namespace driver
         float yaw_now;
         float roll_now;
         float actual_bullet_speed;
+        uint8_t available_shoot_number;
         uint8_t aim_request;
         uint8_t mode_want;
         uint8_t number_want;
@@ -72,6 +73,7 @@ namespace driver
         float yaw_now;
         float roll_now;
         float actual_bullet_speed;
+        uint8_t available_shoot_number;
         uint8_t aim_request;
         uint8_t mode_want;
         uint8_t number_want;
@@ -80,7 +82,7 @@ namespace driver
         Time::TimeStamp timestamp;
 
         ParsedSerialData(const RawSerialData& x) : start_flag(x.start_flag), pitch_now(x.pitch_now), yaw_now(x.yaw_now), roll_now(x.roll_now), 
-            actual_bullet_speed(x.actual_bullet_speed), aim_request(x.aim_request), mode_want(x.mode_want), 
+            actual_bullet_speed(x.actual_bullet_speed), aim_request(x.aim_request), mode_want(x.mode_want), available_shoot_number(x.available_shoot_number),
             number_want(x.number_want), enemy_color(x.enemy_color), timestamp(Time::TimeStamp()) {};
         ParsedSerialData() {};
     };

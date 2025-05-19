@@ -101,18 +101,18 @@ struct measureFunc{
         {
             m[4] = min(angle[this->total_id1], angle[(this->total_id1 + 3)%4]);
             m[5] = max(angle[(this->total_id1 + 1)%4], angle[(this->total_id1 + 2)%4]);
-            // std::cout << "enter one id mode"<<std::endl;
-            // std::cout << "calc id:" << 
-            //     (m[3] == angle[this->total_id1] ? this->total_id1 : (this->total_id1 + 3)%4) << 
-            //     " " <<
-            //     (m[4] == angle[(this->total_id1 + 1)%4] ? (this->total_id1 + 1)%4 : (this->total_id1 + 2)%4) << std::endl;
+             std::cout << "enter one id mode"<<std::endl;
+             std::cout << "calc id:" <<
+                 (m[3] == angle[this->total_id1] ? this->total_id1 : (this->total_id1 + 3)%4) <<
+                 " " <<
+                 (m[4] == angle[(this->total_id1 + 1)%4] ? (this->total_id1 + 1)%4 : (this->total_id1 + 2)%4) << std::endl;
         }
         else
         {
             m[4] = angle[this->total_id1];
             m[5] = angle[(this->total_id2 + 1)%4];
-            //std::cout << "enter two id mode"<<std::endl;
-            //std::cout<< "calc id:" << this->total_id1 << " " << (this->total_id2 + 1)%4 << std::endl;
+            std::cout << "enter two id mode"<<std::endl;
+            std::cout<< "calc id:" << this->total_id1 << " " << (this->total_id2 + 1)%4 << std::endl;
         }
     }
     int id;

@@ -144,6 +144,21 @@ void Replayer::runSerialThread() {
                 }
                 
                 auto& serialData = serial_data_queue_.front();
+                //search nearest data in the queue
+                for(auto& serialData_= serial_data_queue_.front(); 1; serialData_ = serial_data_queue_.front()){
+                    
+                    // 计算应该等待的时间
+                    double elapsedRealSeconds = std::chrono::duration<double>(
+                        std::chrono::steady_clock::now() - startTime).count();
+                    double elapsedSimSeconds = (serialData_.timestamp - firstTimestamp).toSeconds() / playbackSpeed_;
+                    if (elapsedRealSeconds < elapsedSimSeconds)
+                    {
+                        serialData = serialData_;   
+                        break;
+                    }
+                    for(int i=0;i<10;i++)
+                        serial_data_queue_.pop();
+                }
                 
                 // 计算应该等待的时间
                 double elapsedRealSeconds = std::chrono::duration<double>(
@@ -353,7 +368,7 @@ ParsedSerialData Replayer::findNearestSerialData(const Time::TimeStamp& timestam
     if(onlyVideo_) {
         INFO("OnlyVideo mode: returning ZERO serial data");
         ParsedSerialData zeroData;
-        zeroData.pitch_now = 10.0;
+        zeroData.pitch_now = 0.0;
         zeroData.yaw_now = 170.0;
         zeroData.roll_now = 0.0;
         zeroData.actual_bullet_speed = 20.0;

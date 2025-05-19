@@ -4,7 +4,41 @@ namespace predictor{
 
 void MotionModel::initMotionModel()
 {
-
+//    MatrixXX P = MatrixXX::Zero();
+//    P << 0.1,  0.02, 0,    0,    0,    0,    0,    0,    0,    0,
+//            0.02, 0.2,  0,    0,    0,    0,    0,    0,    0,    0,
+//            0,    0,    0.1,  0.02, 0,    0,    0,    0,    0,    0,
+//            0,    0,    0.02, 0.2,  0,    0,    0,    0,    0,    0,
+//            0,    0,    0,    0,    0.1,  0.02, 0,    0,    0,    0,
+//            0,    0,    0,    0,    0.02, 0.2,  0,    0,    0,    0,
+//            0,    0,    0,    0,    0,    0,    0.02, 0.005,0,    0,
+//            0,    0,    0,    0,    0,    0,    0.005,0.02, 0,    0,
+//            0,    0,    0,    0,    0,    0,    0,    0,    0.1,  0,
+//            0,    0,    0,    0,    0,    0,    0,    0,    0,    0.1;
+//
+//    MatrixXX Q = MatrixXX::Zero();
+//    Q << 5e-4, 1e-4, 0,    0,    0,    0,    0,    0,    0,    0,
+//            1e-4, 1e-2, 0,    0,    0,    0,    0,    0,    0,    0,
+//            0,    0,    5e-4, 1e-4, 0,    0,    0,    0,    0,    0,
+//            0,    0,    1e-4, 1e-2, 0,    0,    0,    0,    0,    0,
+//            0,    0,    0,    0,    1e-3, 2e-4, 0,    0,    0,    0,
+//            0,    0,    0,    0,    2e-4, 5e-2, 0,    0,    0,    0,
+//            0,    0,    0,    0,    0,    0,    5e-6, 1e-8, 0,    0,
+//            0,    0,    0,    0,    0,    0,    1e-8, 5e-6, 0,    0,
+//            0,    0,    0,    0,    0,    0,    0,    0,    1e-5, 0,
+//            0,    0,    0,    0,    0,    0,    0,    0,    0,    1e-5;
+//    // 测量变量顺序: ax, ay, az, tangent, angle_left, angle_right
+//    MatrixYY R = MatrixYY::Zero();
+//    R << 0.03,  0.01,  0,     0,     0,     0,
+//            0.01,  0.03,  0,     0,     0,     0,
+//            0,     0,     0.03,  0,     0,     0,
+//            0,     0,     0,     0.1,   0,     0,
+//            0,     0,     0,     0,     0.0004,  0.00015,
+//            0,     0,     0,     0,     0.00015, 0.0004;
+//    //R *= 10;
+//    R*=0.01;
+//    Q*=10;
+//    ekf.init(P, Q, R);
     // 状态变量顺序: x, vx, y, vy, theta, omega, r1, r2, z1, z2
     MatrixXX P = MatrixXX::Zero();
     P << 0.1,  0.02, 0,    0,    0,    0,    0,    0,    0,    0,
@@ -17,7 +51,7 @@ void MotionModel::initMotionModel()
          0,    0,    0,    0,    0,    0,    0.005,0.02, 0,    0,
          0,    0,    0,    0,    0,    0,    0,    0,    0.1,  0,
          0,    0,    0,    0,    0,    0,    0,    0,    0,    0.1;
-    
+
     MatrixXX Q = MatrixXX::Zero();
     Q << 5e-4, 1e-4, 0,    0,    0,    0,    0,    0,    0,    0,
          1e-4, 1e-2, 0,    0,    0,    0,    0,    0,    0,    0,
@@ -34,7 +68,7 @@ void MotionModel::initMotionModel()
     R << 0.03,  0.01,  0,     0,     0,     0,
          0.01,  0.03,  0,     0,     0,     0,
          0,     0,     0.03,  0,     0,     0,
-         0,     0,     0,     0.1,   0,     0,
+         0,     0,     0,     0.01,   0,     0,
          0,     0,     0,     0,     0.04,  0.015,
          0,     0,     0,     0,     0.015, 0.04;
     //R *= 10;
@@ -44,6 +78,10 @@ void MotionModel::initMotionModel()
 
 VectorX MotionModel::getPredictResult(const Time::TimeStamp& timestamp)
 {
+    // INFO("predictResult: {}", ekf.predict(timestamp)[0]);
+    // INFO("predictResult: {}", ekf.predict(timestamp)[1]);
+    // INFO("predictResult: {}", ekf.predict(timestamp)[2]);
+    // INFO("predictResult: {}", ekf.predict(timestamp)[3]);
     return ekf.predict(timestamp);
 }
 

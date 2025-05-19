@@ -25,8 +25,10 @@ private:
     std::vector<std::tuple<cv::Rect2f, int, int>> car_rects;
     Time::TimeStamp last_time;
     //bool first_track = true;
-    
+    TrackResults initArmorTrackResult(const ImuData& imu);
     TrackResults getArmorTrackResult(const Time::TimeStamp& time, const ImuData& imu);
+    void getArmorTrackResultWithWholeCar(const Time::TimeStamp& time, const ImuData& imu,
+                                         const CarTrackResults& carTrackResult, TrackResults& armorTrackResult);
     CarTrackResults getCarTrackResult(const Time::TimeStamp& time, const ImuData& imu, const TrackResults& armor);
 
 public:

@@ -1,9 +1,9 @@
 #include "detector.hpp"
 #include "Log/log.hpp"
 
-auto detector::createDetector(const std::string &armor_model_path, const std::string &car_model_path, bool allowGray) -> std::unique_ptr<Detector>
+auto detector::createDetector(param::Param json_param, bool allowGray) -> std::unique_ptr<Detector>
 {
-    return std::make_unique<detector::Detector>(armor_model_path, car_model_path, allowGray);
+    return std::make_unique<detector::Detector>(json_param, allowGray);
 }
 
 namespace detector

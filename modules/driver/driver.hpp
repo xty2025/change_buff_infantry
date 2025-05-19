@@ -43,13 +43,14 @@ namespace driver
         //ATTENTION:This function shouldn't be used in AutoAim
         //Just for DEBUG
         [[deprecated("This function is for debug purposes only and should not be used in production.")]]
-        ParsedSerialData getNewestSerialData();
+        bool getNewestSerialData(ParsedSerialData& serial_data);
         [[deprecated("This function is for debug purposes only and should not be used in production.")]]
         void sendSerialData(const ControlResult& control_result);
 
 
         void setSerialConfig(SerialConfig config) override;
         void setCameraConfig(CameraConfig config) override;
+        void setCameraExposureTime(int exposure_time);
         std::function<void(const ControlResult&)> sendSerialFunc() override;
         void registReadCallback(std::function<void(const ParsedSerialData&)> callback);
         void runSerialThread();

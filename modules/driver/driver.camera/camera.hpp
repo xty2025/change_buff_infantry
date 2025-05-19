@@ -14,8 +14,10 @@ namespace camera
         virtual void setCameraConfig(CameraConfig config);
         void runCameraThread();
         bool isExistNewCameraData();
+        void setCameraExposureTime(int exposure_time);
         void getCameraData(std::queue<std::shared_ptr<TimeImageData>>& camera_data_pack);
     private:
+        CameraConfig camera_config_;
         int max_camera_data_queue_size_ = 100;
         std::atomic<bool> running_camera_;
         std::mutex camera_data_mutex_;

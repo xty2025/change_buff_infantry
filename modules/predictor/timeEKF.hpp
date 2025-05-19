@@ -21,6 +21,7 @@ class TimeEKF
         VectorX Xp;
         stateTrans.setDt((timestamp - lastTime).toSeconds());
         stateTrans(X, Xp);
+        std::cout<<"Xp:{},{}"<< (timestamp - lastTime).toSeconds();
         return Xp;
     }
     VectorX predict(double dt)

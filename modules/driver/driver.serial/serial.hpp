@@ -31,6 +31,9 @@ namespace serial
             void runSerialThread();
             ParsedSerialData findNearestSerialData(const Time::TimeStamp& timestamp);
             void clearSerialData();
+        bool getNewestSerialData(ParsedSerialData& data);
+
+        void sendSerialData(const ControlResult& control_result);
         private:
             bool tryOpenPort(const std::string& port_name, int baud_rate);
             bool reconnectSerialPort();

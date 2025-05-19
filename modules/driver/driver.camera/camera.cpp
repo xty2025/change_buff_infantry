@@ -19,6 +19,7 @@ auto camera::createCamera() -> std::unique_ptr<Camera> {
 
 
 void Camera::setCameraConfig(camera::CameraConfig config){
+    camera_config_ = config;
     constexpr auto Width = 1280;
     constexpr auto Height = 1024;
 
@@ -47,6 +48,32 @@ void Camera::setCameraConfig(camera::CameraConfig config){
     }catch(const std::exception& e) 
     {
         ERROR("Camera configuration failed {}:{}",config.cameraSN,e.what());
+    }
+}
+
+void Camera::setCameraExposureTime(int exposureTime) {
+    if(exposureTime > 0)
+    {
+        camera_config_.exposureTime = exposureTime;
+    }else
+    {
+        camera_config_.autoExposure = true;
+    }
+    try{
+        daheng_camera->setExposureGainParam(camera_config_.autoExposure,
+                                            camera_config_.autoGain,
+                                            camera_config_.exposureTime,
+                                            camera_config_.autoExposureTimeMin,
+                                            camera_config_.autoExposureTimeMax,
+                                            camera_config_.gain,
+                                            camera_config_.autoGainMin,
+                                            camera_config_.autoGainMax,
+                                            camera_config_.grayValueMin,
+                                            camera_config_.grayValueMax,
+                                            camera_config_.triggerSourceLine2);
+    }catch(const std::exception& e)
+    {
+        ERROR("Camera set exposure time failed {}:{}",camera_config_.cameraSN,e.what());
     }
 }
 
