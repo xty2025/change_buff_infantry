@@ -40,6 +40,7 @@ int main() {
     bool shoot_enable = param["shoot_enable"].Bool();
     bool record_enable = param["record_enable"].Bool();
     bool force_shoot = param["force_shoot"].Bool();
+    bool draw_debug_image = param["debug_on_image"].Bool();
     if(udp_enable)
         UdpSend::instance(param["UDP"]["ip"].String(), param["UDP"]["port"].Int());
     else
@@ -52,7 +53,7 @@ int main() {
         INFO("Recording started");
     }
     //auto driver = createDriver();
-    auto driver = createReplayer("../record/test1.mkv", "null", true, 1);
+    auto driver = createReplayer("../record/rotatecar_with_gimbal.mp4", "../record/20250509231058.txt", true, 1);
     //auto solver = createSolver(param["X"].Double(), param["Y"].Double(), param["X1"].Double(),
     //                            param["Y1"].Double(), param["X2"].Double(), param["Y2"].Double());
     auto solver = createSolver(param["solver"]);
@@ -91,6 +92,11 @@ int main() {
         if(force_shoot) result.shoot_flag = 1;
         result.shoot_flag = shoot_enable? result.shoot_flag : 0;
         control_func(result);
+//        UdpSend::sendData((float)result.pitch_setpoint);
+//        UdpSend::sendData((float)result.yaw_setpoint);
+//        UdpSend::sendData((float)parsedData.pitch_now);
+//        UdpSend::sendData((float)parsedData.yaw_now);
+//        UdpSend::sendTail();
     });
     driver->runSerialThread();
     driver->runCameraThread();
@@ -163,29 +169,36 @@ int main() {
             //XYZ tmp = trackResult.location.xyz_imu;
             //trackResult.location.xyz_imu = tmp; 
             trackResult.yaw = yaw;
-            CXYD coord = trackResult.location.cxy;
-            cv::circle(frame->image, cv::Point(coord.cx, coord.cy), 12, cv::Scalar(255, 255, 0), -1);
-            location::Location temp;
-            temp.imu = imu_data;
-            XYZ temp_xyz = trackResult.location.xyz_imu;
-            temp_xyz.z = 0;
-            temp.xyz_imu = temp_xyz;
-            CXYD coord_z0 = temp.cxy;
-            cv::line(frame->image, cv::Point(coord.cx, coord.cy), cv::Point(coord_z0.cx, coord_z0.cy), cv::Scalar(255, 255, 0), 2);
+            if(draw_debug_image) {
+                CXYD coord = trackResult.location.cxy;
+                cv::circle(frame->image, cv::Point(coord.cx, coord.cy), 12, cv::Scalar(255, 255, 0), -1);
+                location::Location temp;
+                temp.imu = imu_data;
+                XYZ temp_xyz = trackResult.location.xyz_imu;
+                temp_xyz.z = 0;
+                temp.xyz_imu = temp_xyz;
+                CXYD coord_z0 = temp.cxy;
+                cv::line(frame->image, cv::Point(coord.cx, coord.cy), cv::Point(coord_z0.cx, coord_z0.cy),
+                         cv::Scalar(255, 255, 0), 2);
 
-            std::string text = std::to_string(trackResult.yaw);
-            cv::putText(frame->image, text, cv::Point(coord.cx, coord.cy), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 255), 2);
-            std::string text_id = std::to_string(trackResult.armor_id);
-            cv::putText(frame->image, text_id, cv::Point(coord.cx, coord.cy+10), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 0, 255), 2);
-            XYZ armor_center = trackResult.location.xyz_imu;
-            cv::circle(frame->image, cv::Point2f(500-armor_center.y*100.0, 500-armor_center.x*100.0)
-                , 5, cv::Scalar(0, 0, 255), -1);
-            double k = tan(yaw);
-            double dx = 10/sqrt(1+k*k);
-            double dy = k*dx;
-            cv::line(frame->image,cv::Point2f(500-armor_center.y*100.0 +dx, 500-armor_center.x*100.0 - dy),
-                     cv::Point2f(500-armor_center.y*100.0 - dx, 500-armor_center.x*100.0 + dy), cv::Scalar(0, 0, 255), 2);
+                std::string text = std::to_string(trackResult.yaw);
+                cv::putText(frame->image, text, cv::Point(coord.cx, coord.cy), cv::FONT_HERSHEY_SIMPLEX, 0.5,
+                            cv::Scalar(0, 255, 255), 2);
+                std::string text_id = std::to_string(trackResult.armor_id);
+                cv::putText(frame->image, text_id, cv::Point(coord.cx, coord.cy + 10), cv::FONT_HERSHEY_SIMPLEX, 1.0,
+                            cv::Scalar(0, 0, 255), 2);
+                XYZ armor_center = trackResult.location.xyz_imu;
+                cv::circle(frame->image, cv::Point2f(500 - armor_center.y * 100.0, 500 - armor_center.x * 100.0), 5,
+                           cv::Scalar(0, 0, 255), -1);
+                double k = tan(yaw);
+                double dx = 10 / sqrt(1 + k * k);
+                double dy = k * dx;
+                cv::line(frame->image,
+                         cv::Point2f(500 - armor_center.y * 100.0 + dx, 500 - armor_center.x * 100.0 - dy),
+                         cv::Point2f(500 - armor_center.y * 100.0 - dx, 500 - armor_center.x * 100.0 + dy),
+                         cv::Scalar(0, 0, 255), 2);
 
+            }
         }
         //visualize trackResults on frame
         for(auto& trackResult : trackResults.second)
@@ -193,87 +206,97 @@ int main() {
             auto car_id = trackResult.car_id;
             auto car_type = trackResult.car_type;
             auto bounding_rect = trackResult.bounding_rect;
-            cv::rectangle(frame->image, bounding_rect, cv::Scalar(255, 0, 0), 5);
-            cv::putText(frame->image, std::to_string(car_id), bounding_rect.tl(), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 0, 0), 5);
-            cv::putText(frame->image, std::to_string(car_type), bounding_rect.tl() + cv::Point2f(0, 20), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 5);
+            if(draw_debug_image) {
+                cv::rectangle(frame->image, bounding_rect, cv::Scalar(255, 0, 0), 5);
+                cv::putText(frame->image, std::to_string(car_id), bounding_rect.tl(), cv::FONT_HERSHEY_SIMPLEX, 0.5,
+                            cv::Scalar(255, 0, 0), 5);
+                cv::putText(frame->image, std::to_string(car_type), bounding_rect.tl() + cv::Point2f(0, 20),
+                            cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 5);
+            }
         }
         INFO("TrackResults size: {}", trackResults.first.size());
         predictor->update(trackResults, frame->timestamp);
 
-        //DEBUG
-        auto predictions = predictor->predict(frame->timestamp);
-        //visualize predictions on frame
-        bool show = false;
-        for(auto& prediction : predictions)
-        {
-            show = true;
-            XYZ center = prediction.center;
-            UdpSend::sendData((float)center.x);
-            UdpSend::sendData((float)center.y);
-            UdpSend::sendData((float)prediction.z1);
-            UdpSend::sendData((float)prediction.z2);
-            UdpSend::sendData((float)prediction.omega);
-            UdpSend::sendData((float)prediction.vx);
-            UdpSend::sendData((float)prediction.vy);
-            UdpSend::sendData((float)prediction.theta);
+        if(draw_debug_image) {
+            //DEBUG
+            auto predictions = predictor->predict(frame->timestamp);
+            //visualize predictions on frame
+            bool show = false;
+            for (auto &prediction: predictions) {
+                show = true;
+                XYZ center = prediction.center;
+                UdpSend::sendData((float) center.x);
+                UdpSend::sendData((float) center.y);
+                UdpSend::sendData((float) prediction.z1);
+                UdpSend::sendData((float) prediction.z2);
+                UdpSend::sendData((float) prediction.omega);
+                UdpSend::sendData((float) prediction.vx);
+                UdpSend::sendData((float) prediction.vy);
+                UdpSend::sendData((float) prediction.theta);
 
 
-            INFO("ENTER center: x: {}, y: {}, z: {}", center.x, center.y, center.z);
-            //trans to CXYD
-            location::Location temp;
-            temp.imu = imu_data;
-            temp.xyz_imu = center;
-            CXYD coord = temp.cxy;
-            INFO("ENTER coord: cx: {}, cy: {}", coord.cx, coord.cy);
-            cv::circle(frame->image, cv::Point(coord.cx, coord.cy), 8, cv::Scalar(200, 200, 200), -1);
-            for(auto& armor : prediction.armors)
-            {
-                auto armor_center = armor.center;
-                temp.xyz_imu = armor_center;
-                CXYD armor_coord = temp.cxy;
-                if(armor.status == armor.UNSEEN)
-                    cv::circle(frame->image, cv::Point(armor_coord.cx, armor_coord.cy), 5, cv::Scalar(0, 0, 255), -1);
-                else
-                    cv::circle(frame->image, cv::Point(armor_coord.cx, armor_coord.cy), 10, cv::Scalar(100, 255, 100), -1);
-                armor_center.z = 0;
-                temp.xyz_imu = armor_center;
-                CXYD armor_coord_z0 = temp.cxy;
-                cv::line(frame->image, cv::Point(armor_coord.cx, armor_coord.cy), cv::Point(armor_coord_z0.cx, armor_coord_z0.cy), cv::Scalar(255, 255, 0), 2);
-                std::string text = std::to_string(armor.yaw - temp.imu.yaw);
-                cv::putText(frame->image, text, cv::Point(armor_coord.cx, armor_coord.cy), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 255), 2);
-                std::string text_id = std::to_string(armor.id);
-                cv::putText(frame->image, text_id, cv::Point(armor_coord.cx, armor_coord.cy+10), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 0, 255), 2);
-            
-                
-                cv::circle(frame->image, cv::Point2f(500-armor_center.y*100.0, 500-armor_center.x*100.0)
-                , 5, cv::Scalar(255, 255, 255), -1);
-                double k = tan(armor.yaw);
-                double dx = 10/sqrt(1+k*k);
-                double dy = k*dx;
-                cv::line(frame->image,cv::Point2f(500-armor_center.y*100.0 +dx, 500-armor_center.x*100.0 - dy),
-                    cv::Point2f(500-armor_center.y*100.0 - dx, 500-armor_center.x*100.0 + dy), cv::Scalar(255, 255, 255), 2);
+                INFO("ENTER center: x: {}, y: {}, z: {}", center.x, center.y, center.z);
+                //trans to CXYD
+                location::Location temp;
+                temp.imu = imu_data;
+                temp.xyz_imu = center;
+                CXYD coord = temp.cxy;
+                INFO("ENTER coord: cx: {}, cy: {}", coord.cx, coord.cy);
+                cv::circle(frame->image, cv::Point(coord.cx, coord.cy), 8, cv::Scalar(200, 200, 200), -1);
+                for (auto &armor: prediction.armors) {
+                    auto armor_center = armor.center;
+                    temp.xyz_imu = armor_center;
+                    CXYD armor_coord = temp.cxy;
+                    if (armor.status == armor.UNSEEN)
+                        cv::circle(frame->image, cv::Point(armor_coord.cx, armor_coord.cy), 5, cv::Scalar(0, 0, 255),
+                                   -1);
+                    else
+                        cv::circle(frame->image, cv::Point(armor_coord.cx, armor_coord.cy), 10,
+                                   cv::Scalar(100, 255, 100), -1);
+                    armor_center.z = 0;
+                    temp.xyz_imu = armor_center;
+                    CXYD armor_coord_z0 = temp.cxy;
+                    cv::line(frame->image, cv::Point(armor_coord.cx, armor_coord.cy),
+                             cv::Point(armor_coord_z0.cx, armor_coord_z0.cy), cv::Scalar(255, 255, 0), 2);
+                    std::string text = std::to_string(armor.yaw - temp.imu.yaw);
+                    cv::putText(frame->image, text, cv::Point(armor_coord.cx, armor_coord.cy), cv::FONT_HERSHEY_SIMPLEX,
+                                0.5, cv::Scalar(0, 255, 255), 2);
+                    std::string text_id = std::to_string(armor.id);
+                    cv::putText(frame->image, text_id, cv::Point(armor_coord.cx, armor_coord.cy + 10),
+                                cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 0, 255), 2);
+
+
+                    cv::circle(frame->image, cv::Point2f(500 - armor_center.y * 100.0, 500 - armor_center.x * 100.0), 5,
+                               cv::Scalar(255, 255, 255), -1);
+                    double k = tan(armor.yaw);
+                    double dx = 10 / sqrt(1 + k * k);
+                    double dy = k * dx;
+                    cv::line(frame->image,
+                             cv::Point2f(500 - armor_center.y * 100.0 + dx, 500 - armor_center.x * 100.0 - dy),
+                             cv::Point2f(500 - armor_center.y * 100.0 - dx, 500 - armor_center.x * 100.0 + dy),
+                             cv::Scalar(255, 255, 255), 2);
+                }
             }
-        }
-        //draw cross on (500, 500)
-        cv::line(frame->image, cv::Point(500-10, 500), cv::Point(500+10, 500), cv::Scalar(0, 255, 0), 4);
-        cv::line(frame->image, cv::Point(500, 500-10), cv::Point(500, 500+10), cv::Scalar(0, 255, 0), 4);
-        int count_armor_debug = 0;
-        if(show)
-        for(auto& trackResult : trackResults.first)
-        {
-            XYZ armor_xyz = trackResult.location.xyz_imu;
-            UdpSend::sendData(armor_xyz.x);
-            INFO("debug_armor x: {}, y: {}, z: {}", armor_xyz.x, armor_xyz.y, armor_xyz.z);
-            UdpSend::sendData(armor_xyz.y);
-            count_armor_debug++;
-            if(count_armor_debug>= 2)
-                break;
-        }
-        if(show)
-        if(count_armor_debug<2)
-        {
-            UdpSend::sendData((float)0);
-            UdpSend::sendData((float)0);
+            //draw cross on (500, 500)
+            cv::line(frame->image, cv::Point(500 - 10, 500), cv::Point(500 + 10, 500), cv::Scalar(0, 255, 0), 4);
+            cv::line(frame->image, cv::Point(500, 500 - 10), cv::Point(500, 500 + 10), cv::Scalar(0, 255, 0), 4);
+
+            int count_armor_debug = 0;
+            if (show)
+                for (auto &trackResult: trackResults.first) {
+                    XYZ armor_xyz = trackResult.location.xyz_imu;
+                    //UdpSend::sendData(armor_xyz.x);
+                    INFO("debug_armor x: {}, y: {}, z: {}", armor_xyz.x, armor_xyz.y, armor_xyz.z);
+                    //UdpSend::sendData(armor_xyz.y);
+                    count_armor_debug++;
+                    if (count_armor_debug >= 2)
+                        break;
+                }
+            if (show)
+                if (count_armor_debug < 2) {
+                    //UdpSend::sendData((float) 0);
+                    //UdpSend::sendData((float) 0);
+                }
         }
 
         if(udp_enable)

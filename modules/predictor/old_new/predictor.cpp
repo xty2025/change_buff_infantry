@@ -67,8 +67,6 @@ namespace predictor {
                 temp.cx = rightx;
                 edge.cxy = temp;
                 std::get<0>(measure_tuple)[5] = static_cast<PYD>(edge.pyd_imu).yaw;
-                double yaw_diff = std::remainder(std::get<0>(measure_tuple)[5] - std::get<0>(measure_tuple)[4], 2 * M_PI)/2.0;
-                std::get<0>(measure_tuple)[6] = yaw_diff + std::get<0>(measure_tuple)[4];
                 INFO("left-right: {}, {}", std::get<0>(measure_tuple)[5], std::get<0>(measure_tuple)[4]);
                 INFO("left-right = {}", std::get<0>(measure_tuple)[5] - std::get<0>(measure_tuple)[4]);
                 std::get<3>(measure_tuple) = true;
@@ -184,7 +182,6 @@ namespace predictor {
         measure_model[3] = M_PI - measure[3];
         measure_model[4] = -0.5 * M_PI - measure[4];
         measure_model[5] = -0.5 * M_PI - measure[5];
-        measure_model[6] = -0.5 * M_PI - measure[6];
         INFO("ENTER parameter: {}, {}, {}, {}, {}, {}", measure_model[0], measure_model[1], measure_model[2], measure_model[3], measure_model[4], measure_model[5]);
         return measure_model;
     }

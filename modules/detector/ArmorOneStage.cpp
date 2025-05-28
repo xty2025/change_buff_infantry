@@ -392,16 +392,16 @@ namespace detector
         }
         INFO("Armor Detect cost time: {}ms", (Time::TimeStamp::now() - time_stamp).toSeconds() * 1000);
 //         //debug:
-        for (auto bbox = bboxes_temp.begin(); bbox != bboxes_temp.end(); ++bbox)
-        {
-            //use corner
-            cv::line(img, bbox->corners[0], bbox->corners[1], cv::Scalar(0, 255, 0), 2);
-            cv::line(img, bbox->corners[1], bbox->corners[2], cv::Scalar(0, 255, 0), 2);
-            cv::line(img, bbox->corners[2], bbox->corners[3], cv::Scalar(0, 255, 0), 2);
-            cv::line(img, bbox->corners[3], bbox->corners[0], cv::Scalar(0, 255, 0), 2);
-            //use center
-            cv::circle(img, bbox->center, 3, cv::Scalar(0, 255, 0), -1);
-        }
+//        for (auto bbox = bboxes_temp.begin(); bbox != bboxes_temp.end(); ++bbox)
+//        {
+//            //use corner
+//            cv::line(img, bbox->corners[0], bbox->corners[1], cv::Scalar(0, 255, 0), 2);
+//            cv::line(img, bbox->corners[1], bbox->corners[2], cv::Scalar(0, 255, 0), 2);
+//            cv::line(img, bbox->corners[2], bbox->corners[3], cv::Scalar(0, 255, 0), 2);
+//            cv::line(img, bbox->corners[3], bbox->corners[0], cv::Scalar(0, 255, 0), 2);
+//            //use center
+//            cv::circle(img, bbox->center, 3, cv::Scalar(0, 255, 0), -1);
+//        }
 //        //cv::namedWindow("result",cv::WINDOW_NORMAL);
 //        //cv::imshow("result",temp);
 //        //cv::waitKey(1);

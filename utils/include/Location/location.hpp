@@ -8,6 +8,7 @@
 // 定义三种坐标类型
 struct XYZ {
     double x, y, z;
+    double dist(){return std::sqrt(x*x+y*y+z*z);}
 };
 
 struct PYD {

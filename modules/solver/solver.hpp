@@ -95,30 +95,30 @@ public:
         out.k = in.x;
 		return out;
 	}
-	inline XYZ camera2world(const XYZ& in, const PYD& imuData) const override
-	{
+    inline XYZ camera2world(const XYZ& in, const PYD& imuData) const override
+    {
         double imu_yaw = imuData.yaw;
         double imu_pitch = imuData.pitch;
         //double imu_roll = 0;
         Eigen::Vector3d in_eigen = Eigen::Vector3d(in.x, in.y, in.z);
         Eigen::Vector3d gimbal = cameraRotationMatrix * in_eigen + cameraOffset;
-        Eigen::Vector3d world = Eigen::AngleAxisd(-imu_pitch, Eigen::Vector3d::UnitY()).toRotationMatrix()
-                                 * Eigen::AngleAxisd(imu_yaw, Eigen::Vector3d::UnitZ()).toRotationMatrix()
-                                            * gimbal;
+        Eigen::Vector3d world = Eigen::AngleAxisd(imu_yaw, Eigen::Vector3d::UnitZ()).toRotationMatrix()
+                                * Eigen::AngleAxisd(-imu_pitch, Eigen::Vector3d::UnitY()).toRotationMatrix()
+                                * gimbal;
         return XYZ(world(0), world(1), world(2));
-	}
-	inline XYZ world2camera(const XYZ& in, const PYD& imuData) const override
-	{
+    }
+    inline XYZ world2camera(const XYZ& in, const PYD& imuData) const override
+    {
         double imu_yaw = imuData.yaw;
         double imu_pitch = imuData.pitch;
         Eigen::Vector3d in_eigen = Eigen::Vector3d(in.x, in.y, in.z);
-        Eigen::Vector3d gimbal = Eigen::AngleAxisd(-imu_yaw, Eigen::Vector3d::UnitZ()).toRotationMatrix()
-                                 * Eigen::AngleAxisd(imu_pitch, Eigen::Vector3d::UnitY()).toRotationMatrix()
-                                            * in_eigen;
+        Eigen::Vector3d gimbal = Eigen::AngleAxisd(imu_pitch, Eigen::Vector3d::UnitY()).toRotationMatrix()
+                                 * Eigen::AngleAxisd(-imu_yaw, Eigen::Vector3d::UnitZ()).toRotationMatrix()
+                                 * in_eigen;
         Eigen::Vector3d camera = cameraRotationMatrix.inverse() * (gimbal - cameraOffset);
 
         return XYZ(camera(0), camera(1), camera(2));
-	}
+    }
 	
 	std::pair<XYZ,double> camera2world(const ArmorXYV& trackResult, const ImuData& imuData, bool isLarge);
     std::pair<XYZ,double> camera2worldWithWholeCar(const ArmorXYV& trackResult, const ImuData& imuData, const cv::Rect& bounding_rect, bool isLarge);

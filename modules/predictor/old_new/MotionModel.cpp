@@ -143,13 +143,12 @@ void MotionModel::initMotionModel()
 
             // 测量变量顺序: ax, ay, az, tangent, angle_left, angle_right
     MatrixYY R = MatrixYY::Zero();
-    R << 0.01,  0,     0,     0,     0,     0, 0,
-         0.,    0.01,  0,     0,     0,     0, 0,
-         0,     0,     0.1,   0,     0,     0, 0,
-         0,     0,     0,     0.04,   0,     0, 0,
-         0,     0,     0,     0,     0.04,  0.015,0,
-         0,     0,     0,     0,     0.015, 0.04,0,
-         0,     0,     0,     0,     0,     0,   0.01;
+    R << 0.01,  0,     0,     0,     0,     0,
+         0.,    0.01,  0,     0,     0,     0,
+         0,     0,     0.1,   0,     0,     0,
+         0,     0,     0,     0.01,   0,     0,
+         0,     0,     0,     0,     0.04,  0.015,
+         0,     0,     0,     0,     0.015, 0.04;
     //R *= 10;
     R *= 0.1;
     ekf.init(P, Q_val, R);
@@ -189,8 +188,7 @@ void MotionModel::Update(const VectorY& measure_vec, const Time::TimeStamp& time
         measure_adjust[3] = std::remainder(measure_vec[3] - measure_pred[3], 2 * M_PI) + measure_pred[3];
         measure_adjust[4] = std::remainder(measure_vec[4] - measure_pred[4], 2 * M_PI) + measure_pred[4];
         measure_adjust[5] = std::remainder(measure_vec[5] - measure_pred[5], 2 * M_PI) + measure_pred[5];
-        measure_adjust[6] = std::remainder(measure_vec[6] - measure_pred[6], 2 * M_PI) + measure_pred[6];
-
+        
 
         // auto x = ekf.getX();
         // auto theta = x[4]+ M_PI / 2. * armor_id;

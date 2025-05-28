@@ -7,7 +7,7 @@
 namespace predictor{
 
 const int N_X = 12;
-const int N_Y = 7;
+const int N_Y = 6;
 using VectorX = Eigen::Matrix<double, N_X, 1>;
 using VectorY = Eigen::Matrix<double, N_Y, 1>;
 using MatrixXX = Eigen::Matrix<double, N_X, N_X>;
@@ -77,7 +77,6 @@ struct measureFunc{
         m[0] = ceres::atan2(z, ceres::sqrt(armor_x * armor_x + armor_y * armor_y));
         m[1] = ceres::atan2(armor_y, armor_x);
         m[3] = M_PI/2 - theta;
-        m[6] = ceres::atan2(y,x);
         T true_theta = s[4];
         T angle[4];
         angle[0] =  ceres::atan2(y - r1 * ceres::sin(true_theta) + r2 * ceres::cos(true_theta),x + r1 * ceres::cos(true_theta) + r2 * ceres::sin(true_theta)) ;/// M_PI;

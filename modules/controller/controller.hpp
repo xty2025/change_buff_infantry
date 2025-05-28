@@ -45,13 +45,10 @@ namespace controller
         const double bullet_speed_alpha = 0.5;
 
         std::chrono::duration<double> shootDelay = 0.1s;
-        double tol_pitch = 0.0;
-        double tol_yaw = 0.0;
-        double pitch_offset = 0.0;
-        double yaw_offset = 0.0;
-        double x_offset = 0.0;
-        double y_offset = 0.0;
-        double z_offset = 0.0;
+
+        double tol_deltax = 0.2;
+        double tol_deltay = 0.1;
+        double response_speed = 0.5; // 0.5 rad/s
         double armor_yaw_allow = 45.0;
         bool mouse_require = false;
         double pic_camera_x = 640.0; //图传模块中心点在相机坐标系中的坐标

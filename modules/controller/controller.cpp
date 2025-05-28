@@ -21,6 +21,7 @@ void Controller::readJsonParam()
     mouse_require = json_param["mouse_require"].Bool();
     pic_camera_x = json_param["pic_camera_x"].Double();
     pic_camera_y = json_param["pic_camera_y"].Double();
+    response_speed = json_param["response_speed"].Double();
     shootDelay = std::chrono::duration<double>(json_param["shoot_delay"].Double());
 }
 
@@ -66,6 +67,7 @@ ControlResult Controller::control(const ParsedSerialData& parsedData)
         bullet_speed = parsedData.actual_bullet_speed * bullet_speed_alpha + (1 - bullet_speed_alpha) * bullet_speed;
     }
 
+    bool aim_center_request = parsedData.aim_request == 3;
 
     ControlResult result;
     result.yaw_setpoint = parsedData.yaw_now;
@@ -75,7 +77,7 @@ ControlResult Controller::control(const ParsedSerialData& parsedData)
     result.valid = false;
     result.shoot_flag = false;
 
-    Predictions predictions_for_time = predictFunc(Time::TimeStamp::now() + flyTime + shootDelay);
+    Predictions predictions_for_time = predictFunc(Time::TimeStamp::now() + flyTime);
     if (predictions_for_time.empty())
     {
         WARN("No prediction");
@@ -128,7 +130,7 @@ ControlResult Controller::control(const ParsedSerialData& parsedData)
     if (distance > 0.0)
     {
         flyTime = std::chrono::duration<double>(distance / bullet_speed);//粗略计算
-        predictions_for_time = predictFunc(Time::TimeStamp::now() + flyTime + shootDelay);
+        predictions_for_time = predictFunc(Time::TimeStamp::now() + flyTime);
     }
     it = std::find_if(predictions_for_time.begin(), predictions_for_time.end(),
         [&](const auto& prediction) { return prediction.id == aim_armor_id.first; });
@@ -139,59 +141,112 @@ ControlResult Controller::control(const ParsedSerialData& parsedData)
     }
     bool is_valid_armor_id = std::any_of(it->armors.begin(), it->armors.end(),
         [&](const auto& armor) { return (armor.id == aim_armor_id.second) && (armor.status == Armor::AVAILABLE); });
-    if (!is_valid_armor_id)
+    if(is_valid_armor_id)
     {
+        //计算临界角
+        double radius = (aim_armor_id.second % 2 == 0)?it->r1:it->r2;
+        double jump_angle = M_PI / 4 - ((std::abs(it->omega)>0.01)?(1/(1+1.414*distance*response_speed/radius/std::abs(it->omega))):(0));
+        INFO("BADANGLE:{}",jump_angle);
+        if(jump_angle<0)jump_angle = M_PI / 6;
+        if(std::abs(it->omega)>0.6)//ANTI ROTATE
+        {
+            if(it->omega>0&&it->armors[aim_armor_id.second].yaw>jump_angle)
+            {
+                aim_armor_id.second = (aim_armor_id.second + 3) % 4;
+            }
+            else if(it->omega<0&&it->armors[aim_armor_id.second].yaw<-jump_angle)
+            {
+                aim_armor_id.second = (aim_armor_id.second + 1) % 4;
+            }
+            is_valid_armor_id = std::any_of(it->armors.begin(), it->armors.end(),
+                                                 [&](const auto& armor) { return (armor.id == aim_armor_id.second) && (armor.status == Armor::AVAILABLE); });
+        }
+    }
+    bool found = false;
+    if (!is_valid_armor_id) {
         WARN("Invalid armor id");
+        INFO("Invalid armor :{}",aim_armor_id.second);
+        if(aim_armor_id.second >= 0)
+            INFO("Invalid for yaw:{}",it->armors[aim_armor_id.second].yaw);
         //重新选择一个距离最近的
         double min_distance = std::numeric_limits<double>::max();
-        bool found = false;
         location::Location tmp;
         tmp.imu = ImuData(parsedData);
-        for (const auto& armor : it->armors)
-        {
-            if (armor.status == Armor::AVAILABLE)
-            {
+        for (const auto &armor: it->armors) {
+            if (armor.status == Armor::AVAILABLE) {
                 double distance;
-                if(!mouse_require)
+                if (!mouse_require)
                     distance = armor.center.x * armor.center.x + armor.center.y * armor.center.y;
-                else
-                {
+                else {
                     tmp.xyz_imu = armor.center;
                     CXYD tmp_cxy = tmp.cxy;
-                    distance = (tmp_cxy.cx - pic_camera_x) * (tmp_cxy.cx - pic_camera_x) + (tmp_cxy.cy - pic_camera_y) * (tmp_cxy.cy - pic_camera_y);
+                    distance = (tmp_cxy.cx - pic_camera_x) * (tmp_cxy.cx - pic_camera_x) +
+                               (tmp_cxy.cy - pic_camera_y) * (tmp_cxy.cy - pic_camera_y);
                 }
-                if (distance < min_distance)
-                {
+                if (distance < min_distance) {
                     min_distance = distance;
                     aim_armor_id.second = armor.id;
                     found = true;
                 }
             }
         }
-        if (!found)
+    }
+    if (((!is_valid_armor_id)&&(!found)) || aim_center_request)
+    {
+        WARN("No available armor");
+        WARN("Now choose to aim at the car");
+        double pitch = 0.0;
+        double yaw = 0.0;
+        double time = 0.0;
+        bool success = calcPitchYaw(pitch, yaw, time, it->center.x, it->center.y, it->center.z);
+        if (!success)
         {
-            WARN("No available armor");
-            WARN("Now choose to aim at the car");
-            double pitch = 0.0;
-            double yaw = 0.0;
-            double time = 0.0;
-            bool success = calcPitchYaw(pitch, yaw, time, it->center.x + x_offset, it->center.y + y_offset, it->center.z + z_offset);
-            if (!success)
-            {
-                WARN("calcPitchYaw failed");
-                return result;
-            }
-            result.pitch_setpoint = pitch * 180 / PI;
-            result.yaw_setpoint = yaw * 180 / PI;
-            result.yaw_setpoint = parsedData.yaw_now + std::remainder(result.yaw_setpoint - parsedData.yaw_now, 360.0);
-            result.pitch_actual_want = result.pitch_setpoint;
-            result.yaw_actual_want = result.yaw_setpoint;
-            result.valid = true;
-            result.shoot_flag = false;
-            flyTime = std::chrono::duration<double>(time);
-            INFO("aim_pitch:{},aim_yaw:{}", result.pitch_setpoint, result.yaw_setpoint);
+            WARN("calcPitchYaw failed");
             return result;
         }
+        result.pitch_setpoint = pitch * 180 / PI;
+        result.yaw_setpoint = yaw * 180 / PI;
+        result.yaw_setpoint = parsedData.yaw_now + std::remainder(result.yaw_setpoint - parsedData.yaw_now, 360.0);
+        result.pitch_actual_want = result.pitch_setpoint;
+        result.yaw_actual_want = result.yaw_setpoint;
+        result.valid = true;
+        result.shoot_flag = false;
+        flyTime = std::chrono::duration<double>(time);
+        INFO("aim_pitch:{},aim_yaw:{}", result.pitch_setpoint, result.yaw_setpoint);
+    }
+    if(aim_center_request)
+    {
+        predictions_for_time = predictFunc(Time::TimeStamp::now() + flyTime + shootDelay);
+        it = std::find_if(predictions_for_time.begin(), predictions_for_time.end(),
+                          [&](const auto& prediction) { return prediction.id == aim_armor_id.first; });
+        if (it == predictions_for_time.end())
+        {
+            WARN("New car id invalid after flytime update");
+            return result;
+        }
+        for(int i=0;i<4;i++)
+        {
+            double pitch,yaw,time;
+            if(it->armors[i].status == Armor::AVAILABLE)
+            {
+                auto armor_it = it->armors[i];
+                if (!calcPitchYaw(pitch, yaw, time, armor_it.center.x, armor_it.center.y, armor_it.center.z))
+                {
+                    WARN("calcPitchYaw failed");
+                    continue;
+                }
+            }
+            double delta_yaw = std::remainder(pitch - parsedData.pitch_now * M_PI / 180 ,2 * M_PI);
+            double delta_pitch = std::remainder(yaw - parsedData.yaw_now * M_PI / 180 ,2 * M_PI);
+            double dist = it->armors[i].center.dist();
+            if(std::tan(delta_yaw)*dist<tol_deltax && std::tan(delta_pitch)*dist<tol_deltay)
+            {
+                result.shoot_flag = true;
+                return result;
+            }
+        }
+        result.shoot_flag = false;
+        return result;
     }
     auto armor_it = std::find_if(it->armors.begin(), it->armors.end(),
         [&](const auto& armor) { return armor.id == aim_armor_id.second; });
@@ -205,52 +260,25 @@ ControlResult Controller::control(const ParsedSerialData& parsedData)
     double pitch = 0.0;
     double yaw = 0.0;
     double time = 0.0;
-    if (!calcPitchYaw(pitch, yaw, time, armor_it->center.x + x_offset, armor_it->center.y + y_offset, armor_it->center.z + z_offset))
+    if (!calcPitchYaw(pitch, yaw, time, armor_it->center.x, armor_it->center.y, armor_it->center.z))
     {
         WARN("calcPitchYaw failed");
         return result;
     }
-    result.pitch_setpoint = pitch * 180 / PI + pitch_offset;
-    result.yaw_setpoint = yaw * 180 / PI + yaw_offset;
+    result.pitch_setpoint = pitch * 180 / PI;
+    result.yaw_setpoint = yaw * 180 / PI;
     result.yaw_setpoint = parsedData.yaw_now + std::remainder(result.yaw_setpoint - parsedData.yaw_now, 360.0);
     result.valid = true;
 
-    double armor_yaw_now = armor_it->yaw * 180 / PI - parsedData.yaw_now;
-    if(thetaInRange(armor_yaw_now, armor_yaw_allow)&&it->stable)
+    double delta_yaw = std::remainder(pitch - parsedData.pitch_now * M_PI / 180 ,2 * M_PI);
+    double delta_pitch = std::remainder(yaw - parsedData.yaw_now * M_PI / 180 ,2 * M_PI);
+    double dist = armor_it->center.dist();
+    if(std::tan(delta_yaw)*dist<tol_deltax && std::tan(delta_pitch)*dist<tol_deltay)
     {
         result.shoot_flag = true;
     }
     else
-    {
-        WARN("armor yaw not in allow range");
         result.shoot_flag = false;
-    }
-
-    //calc actual want with no shootDelay
-    //i.e. ignore motion time delay
-    predictions_for_time = predictFunc(Time::TimeStamp::now() + flyTime);
-    auto actual_car_it = std::find_if(predictions_for_time.begin(), predictions_for_time.end(),
-        [&](const auto& prediction) { return prediction.id == aim_armor_id.first; });
-    auto actual_armor_it = std::find_if(actual_car_it->armors.begin(), actual_car_it->armors.end(),
-        [&](const auto& armor) { return armor.id == aim_armor_id.second; });
-    if(!calcPitchYaw(pitch, yaw, time, actual_armor_it->center.x + x_offset, actual_armor_it->center.y + y_offset, actual_armor_it->center.z + z_offset))
-    {
-        WARN("calcPitchYaw failed");
-        result.shoot_flag = false;
-        return result;
-    }
-    else
-    {
-        result.yaw_actual_want = yaw * 180 / PI + yaw_offset;
-        result.pitch_actual_want = pitch * 180 / PI + pitch_offset;
-        result.yaw_actual_want = parsedData.yaw_now + std::remainder(result.yaw_actual_want - parsedData.yaw_now, 360.0);
-        if(abs(result.yaw_actual_want - parsedData.yaw_now) > tol_yaw||
-           abs(result.pitch_actual_want - parsedData.pitch_now) > tol_pitch)
-        {
-            WARN("not in tolerance, cancel shoot");
-            result.shoot_flag = false;
-        }
-    }
     return result;
 }
 

@@ -14,6 +14,8 @@ using namespace modules;
 using namespace aimlog;
 using namespace recording;
 
+namespace fs = std::filesystem;
+
 
 // 控制指令最好不要以超高频率发送
 // 控制指令间隔不能较长，须保证串口处于激活状态
@@ -101,39 +103,122 @@ int main() {
 
 void cameraCalib(std::unique_ptr<Driver> &driver)
 {
-    std::cout<<"相机标定板标定，仅保存图片，自行前往matlab进行计算"<<std::endl;
-    std::cout<<"请将云台下电，程序将每隔2s记录图像数据"<<std::endl;
-    std::cout<<"按下回车键开始标定"<<std::endl;
-    while(std::cin.get() != '\n');
-    std::cout<<"开始标定"<<std::endl;
-    std::cout<<"按下q退出"<<std::endl<<std::endl;
-    std::queue<std::shared_ptr<TimeImageData>> frame_pack;
+    VideoStreamer::init();
+    std::cout << "相机标定板标定，仅保存图片，自行前往matlab进行计算" << std::endl;
+    std::cout << "请将云台下电，程序将每隔2s记录图像数据" << std::endl;
+    std::cout << "按下回车键开始标定" << std::endl;
+    while (std::cin.get() != '\n'); // 等待回车
+    std::cout << "开始标定" << std::endl;
+    std::cout << "在控制台输入 'q' 然后按回车键退出" << std::endl << std::endl; // 修改退出提示
+
     int count = 1;
-    while (true)
+    std::string path = "../calib/"; // 目标路径
+
+    // --- 解决问题1：创建目录 ---
+    try {
+        if (!fs::exists(path)) {
+            if (fs::create_directories(path)) { // create_directories 会创建所有不存在的父目录
+                std::cout << "目录 " << path << " 已创建." << std::endl;
+            } else {
+                std::cerr << "错误: 无法创建目录 " << path << std::endl;
+                return; // 创建失败则退出
+            }
+        }
+    } catch (const fs::filesystem_error& e) {
+        std::cerr << "文件系统错误: " << e.what() << std::endl;
+        return;
+    }
+    // --- 问题1解决完毕 ---
+
+    bool quit_flag = false;
+    // --- 解决问题2：使用非阻塞的控制台输入 ---
+    // 创建一个线程来监听退出命令
+    std::thread input_thread([&quit_flag]() {
+        char c;
+        while (std::cin.get(c)) {
+            if (c == 'q') {
+                quit_flag = true;
+                break;
+            }
+            // 可以选择忽略其他输入或给出提示
+        }
+    });
+    input_thread.detach(); // 分离线程，让它在后台运行
+
+    Time::TimeStamp current_time = Time::TimeStamp::now();
+    cv::Mat newest_image;
+    while (!quit_flag) // 使用标志位来控制循环
     {
-        if( (char)cv::waitKey(2000) == 'q')
+        // 等待2秒
+        //std::this_thread::sleep_for(std::chrono::seconds(2)); // 使用 C++ 标准库延时
+        if(!driver->isExistNewCameraData())
         {
-            std::cout<<"退出标定"<<std::endl;
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            continue;
+        }
+        std::queue<std::shared_ptr<TimeImageData>> camera_data_pack;
+        driver->getCameraData(camera_data_pack);
+        if(!camera_data_pack.empty())
+            newest_image = camera_data_pack.back()->image.clone();
+        VideoStreamer::setFrame(newest_image.clone());
+        double dt = (Time::TimeStamp::now() - current_time).toSeconds();
+        if(dt<=1){
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            continue; // 如果距离上次采集时间小于1秒，则继续等待
+        }
+        current_time = Time::TimeStamp::now(); // 更新当前时间
+        if (quit_flag) { // 在获取相机数据前再次检查
             break;
         }
-        driver->getCameraData(frame_pack);
-        if (frame_pack.empty())
-        {
-            std::cout<<"相机读取失败"<<std::endl;
-        }
+
+
         std::string filename = "calib_" + std::to_string(count) + ".png";
-        std::string path = "../calib/";
-        cv::imwrite(path + filename, frame_pack.front()->image);
-        std::cout << "\033[F\033[K";
-        std::cout << "Saved: " << filename << std::endl;
-        count++;
+        if (cv::imwrite(path + filename, newest_image.clone())) {
+            std::cout << "\033[F\033[K"; // 清除上一行 (可能在所有终端上不完全兼容)
+            std::cout << "Saved: " << filename << std::endl;
+            count++;
+        } else {
+            std::cerr << "错误: 无法保存图像 " << path + filename << std::endl;
+        }
+        cv::Mat pureWhiteImg = cv::Mat::zeros(newest_image.size(), newest_image.type());
+        VideoStreamer::setFrame(pureWhiteImg);
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
-    if(count > 5)
-    {    //执行自动压缩
-        std::cout << "正在压缩标定数据" << std::endl;
-        std::string command = "zip -r calib.zip ../calib";
+
+    std::cout << "退出标定" << std::endl;
+
+    if (count > 1) { // 至少保存了一张图片才压缩 (原先是 >5)
+        std::cout << "正在压缩标定数据..." << std::endl;
+        // 确保路径正确，特别是在不同操作系统上
+        std::string command;
+        command = "rm -f ../calib.zip"; // 删除旧的 calib.zip 文件
+        std::cout << "执行删除命令: " << command << std::endl;
         int result = system(command.c_str());
-        std::cout << "压缩完成" << std::endl;
+        if (result == 0) {
+            std::cout << "删除旧的 calib.zip 完成" << std::endl;
+        } else {
+            std::cerr << "删除失败，返回码: " << result << std::endl;
+        }
+        // Linux/macOS
+        command = "zip -rj ../calib.zip " + fs::absolute(path).string(); // -j 表示不包含目录结构，只压缩文件
+        // 如果要包含 calib 目录，使用 -r
+        std::cout << "执行压缩命令: " << command << std::endl;
+        result = system(command.c_str());
+        if (result == 0) {
+            std::cout << "压缩完成: calib.zip" << std::endl;
+        } else {
+            std::cerr << "压缩失败，返回码: " << result << std::endl;
+        }
+    }
+    std::cout << "Auto remove png file." << std::endl;
+    std::string command;
+    command = "rm -rf ../calib";
+    std::cout << "执行删除命令: " << command << std::endl;
+    int result = system(command.c_str());
+    if (result == 0) {
+        std::cout << "删除完成" << std::endl;
+    } else {
+        std::cerr << "删除失败，返回码: " << result << std::endl;
     }
 }
 void gimbalCalib(std::unique_ptr<Driver> &driver)
