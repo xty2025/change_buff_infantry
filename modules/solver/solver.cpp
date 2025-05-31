@@ -213,7 +213,13 @@ std::pair<XYZ,double> Solver::camera2worldWithWholeCar(const ArmorXYV& trackResu
     double rect_center_x = (bounding_rect.x + bounding_rect.width / 2);
     double armor_center_x = (imagePoints[0].x + imagePoints[1].x + imagePoints[2].x + imagePoints[3].x) / 4;
     double half_width = bounding_rect.width / 2;
-    estimate_armor_yaw = std::asin((armor_center_x - rect_center_x) / half_width);
+    if((armor_center_x - rect_center_x) / half_width > 1)
+        estimate_armor_yaw = M_PI / 2.0;
+    else if ((armor_center_x - rect_center_x) / half_width < -1)
+        estimate_armor_yaw = -M_PI / 2.0;
+    else
+        estimate_armor_yaw = std::asin((armor_center_x - rect_center_x) / half_width);
+
 
     // 遍历所有解，选择与上一帧最接近的
     for (int i = 0; i < solutions; i++) {
