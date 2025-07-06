@@ -84,7 +84,7 @@ struct measureFunc{
         angle[1] =  ceres::atan2(y - r1 * ceres::sin(true_theta) - r2 * ceres::cos(true_theta),x + r1 * ceres::cos(true_theta) - r2 * ceres::sin(true_theta)) ;/// M_PI;
         angle[2] =  ceres::atan2(y + r1 * ceres::sin(true_theta) - r2 * ceres::cos(true_theta),x - r1 * ceres::cos(true_theta) - r2 * ceres::sin(true_theta)) ;/// M_PI;
         angle[3] =  ceres::atan2(y + r1 * ceres::sin(true_theta) + r2 * ceres::cos(true_theta),x - r1 * ceres::cos(true_theta) + r2 * ceres::sin(true_theta)) ;/// M_PI;
-
+        
         if(this->total_id1 == -1 || mode == false)
         {
             m[4] = min(min(angle[0], angle[1]), min(angle[2], angle[3]));
@@ -96,18 +96,18 @@ struct measureFunc{
         {
             m[4] = min(angle[this->total_id1], angle[(this->total_id1 + 3)%4]);
             m[5] = max(angle[(this->total_id1 + 1)%4], angle[(this->total_id1 + 2)%4]);
-             std::cout << "enter one id mode"<<std::endl;
-             std::cout << "calc id:" <<
-                 (m[3] == angle[this->total_id1] ? this->total_id1 : (this->total_id1 + 3)%4) <<
-                 " " <<
-                 (m[4] == angle[(this->total_id1 + 1)%4] ? (this->total_id1 + 1)%4 : (this->total_id1 + 2)%4) << std::endl;
+            // std::cout << "enter one id mode"<<std::endl;
+            // std::cout << "calc id:" <<
+            //     (m[3] == angle[this->total_id1] ? this->total_id1 : (this->total_id1 + 3)%4) <<
+            //     " " <<
+            //     (m[4] == angle[(this->total_id1 + 1)%4] ? (this->total_id1 + 1)%4 : (this->total_id1 + 2)%4) << std::endl;
         }
         else
         {
             m[4] = angle[this->total_id1];
             m[5] = angle[(this->total_id2 + 1)%4];
-            std::cout << "enter two id mode"<<std::endl;
-            std::cout<< "calc id:" << this->total_id1 << " " << (this->total_id2 + 1)%4 << std::endl;
+            //std::cout << "enter two id mode"<<std::endl;
+            //std::cout<< "calc id:" << this->total_id1 << " " << (this->total_id2 + 1)%4 << std::endl;
         }
     }
     int id;
@@ -118,7 +118,7 @@ struct measureFunc{
         this->id = id_;
     }
     //mode = true: Update Mode
-    //mode = false: Predict Mode
+    //mode = false: Predict Mode 
     void setMode(bool updateMode){
         this->mode = updateMode;
     }

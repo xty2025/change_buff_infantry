@@ -12,6 +12,11 @@
 #include "solver/solver.hpp"
 #include "controller/controller.hpp"
 #include "driver/driver.hpp"
+//TODO
+#include "buff/BuffDetector.hpp"
+#include "buff/BuffCalculator.hpp"
+#include "buff/BuffController.hpp"
+//TODO
 
 namespace modules
 {
@@ -22,6 +27,7 @@ namespace modules
     using namespace tracker;
     using namespace solver;
     using namespace replayer;
+    using namespace power_rune;
 
 } // namespace modules
 

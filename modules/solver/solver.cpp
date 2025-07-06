@@ -220,7 +220,6 @@ std::pair<XYZ,double> Solver::camera2worldWithWholeCar(const ArmorXYV& trackResu
     else
         estimate_armor_yaw = std::asin((armor_center_x - rect_center_x) / half_width);
 
-
     // 遍历所有解，选择与上一帧最接近的
     for (int i = 0; i < solutions; i++) {
         cv::Mat rotMat;

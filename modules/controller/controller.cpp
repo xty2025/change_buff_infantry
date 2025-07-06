@@ -64,6 +64,7 @@ ControlResult Controller::control(const ParsedSerialData& parsedData)
 
     if(parsedData.actual_bullet_speed > min_bullet_speed)
     {
+    INFO("parsedData.actual_bullet_speed:{}",parsedData.actual_bullet_speed);
         bullet_speed = parsedData.actual_bullet_speed * bullet_speed_alpha + (1 - bullet_speed_alpha) * bullet_speed;
     }
 
@@ -279,6 +280,7 @@ ControlResult Controller::control(const ParsedSerialData& parsedData)
     }
     else
         result.shoot_flag = false;
+    INFO("flyTime:{}",flyTime.count());
     return result;
 }
 

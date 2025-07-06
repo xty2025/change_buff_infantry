@@ -1,9 +1,5 @@
 # AutoAim
-version 1.1
-
-已在区域赛验证使用。
-
-无打符版本。
+version 0.0.2(unfinished)
 
 **可使用WSL2运行+调试功能**
 

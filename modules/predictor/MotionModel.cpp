@@ -110,8 +110,8 @@ void MotionModel::initMotionModel()
 //            0,     0,     0,     0,     0,     0,     0,     0,     0,     1e-5,  0,     0,      // z2
 //            0,     2e-3,  0,     0,     0,     0,     0,     0,     0,     0,     2e-1,  0,      // ax
 //            0,     0,     0,     2e-3,  0,     0,     0,     0,     0,     0,     0,     2e-1;   // ay
-    double q_ax_jerk_base_ = 0.5;     // m^2/s^5
-    double q_ay_jerk_base_ = 0.5;     // m^2/s^5
+    double q_ax_jerk_base_ = 3;     // m^2/s^5
+    double q_ay_jerk_base_ = 3;     // m^2/s^5
     double q_omega_accel_base_ = 0.2; // rad^2/s^3
     double q_r1_drift_base_ = 1e-5;   // m^2/s
     double q_r2_drift_base_ = 1e-5;   // m^2/s
@@ -137,7 +137,7 @@ void MotionModel::initMotionModel()
 
     // Parameters: r1, r2, z1, z2 (indices 6, 7, 8, 9)
     Q_val(6,6) = q_r1_drift_base_ * dt;
-    Q_val(7,7) = q_r2_drift_base_ * dt;
+    Q_val(7,7) = q_r2_drift_base_ * dt; 
     Q_val(8,8) = q_z1_drift_base_ * dt;
     Q_val(9,9) = q_z2_drift_base_ * dt;
 
