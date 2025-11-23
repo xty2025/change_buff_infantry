@@ -76,18 +76,144 @@ python server.py
 ### 代码结构
 ```
 AutoAim/
-├── modules/           # 核心功能模块
-│   ├── driver/        # 驱动模块
-│   ├── detector/      # 检测模块
-│   ├── tracker/       # 跟踪模块
-│   ├── predictor/     # 预测模块
-│   ├── solver/        # 解算模块
-│   ├── controller/    # 控制模块
-│   └── replayer/      # 回放模块
-├── utils/             # 工具库
-│   └── include/       # 工具头文件
-├── bin/               # 编译输出目录
-└── CMakeLists.txt     # CMake 配置文件
+├── modules/                    # 核心功能模块
+│   ├── ControlOptimizer/       # 主要是优化作用
+│   │   ├── CMakeLists.txt
+│   │   ├── ControlOptimizer.cpp
+│   │   ├── ControlOptimizer.hpp
+│   │   └── README.md
+│   ├── RecordSolver/           # 记录解算模块
+│   │   ├── CMakeLists.txt
+│   │   ├── README.md
+│   │   ├── recordsolver.cpp
+│   │   └── recordsolver.hpp
+│   ├── buff/                   # 打符模块，分红蓝，预测+s控制
+│   │   ├── BuffCalculator.cpp
+│   │   ├── BuffCalculator.hpp
+│   │   ├── BuffController.cpp
+│   │   ├── BuffController.hpp
+│   │   ├── BuffDetector.cpp
+│   │   ├── BuffDetector.hpp
+│   │   └── CMakeLists.txt
+│   ├── controller/             # 控制模块
+│   │   ├── CMakeLists.txt
+│   │   ├── controller.cpp
+│   │   ├── controller.hpp
+│   │   ├── controller2.cpp
+│   │   └── type.hpp
+│   ├── detector/               # 检测模块
+│   │   ├── ArmorOneStage.cpp
+│   │   ├── ArmorOneStage.hpp
+│   │   ├── CMakeLists.txt
+│   │   ├── NumberClassifier.cpp
+│   │   ├── NumberClassifier.hpp
+│   │   ├── YoloDetector.cpp
+│   │   ├── YoloDetector.hpp
+│   │   ├── detector.cpp
+│   │   ├── detector.hpp
+│   │   └── type.hpp
+│   ├── driver/                 # 驱动模块
+│   │   ├── CMakeLists.txt
+│   │   ├── driver.camera/
+│   │   │   ├── DaHengCamera.cpp
+│   │   │   ├── DaHengCamera.hpp
+│   │   │   ├── DxImageProc.h
+│   │   │   ├── GxIAPI.h
+│   │   │   ├── camera.cpp
+│   │   │   └── camera.hpp
+│   │   ├── driver.cpp
+│   │   ├── driver.hpp
+│   │   ├── driver.serial/
+│   │   │   ├── CRC16.cpp
+│   │   │   ├── CRC16.h
+│   │   │   ├── serial.cpp
+│   │   │   └── serial.hpp
+│   │   └── type.hpp
+│   ├── modules.hpp
+│   ├── predictor/              # 预测模块
+│   │   ├── CMakeLists.txt
+│   │   ├── MotionModel.cpp
+│   │   ├── MotionModel.hpp
+│   │   ├── ekf.hpp
+│   │   ├── old/
+│   │   ├── old2/
+│   │   ├── old3/
+│   │   ├── old_new/
+│   │   ├── predictor.cpp
+│   │   ├── predictor.hpp
+│   │   ├── timeEKF.hpp
+│   │   └── type.hpp
+│   ├── replayer/              # 回放模块
+│   │   ├── CMakeLists.txt
+│   │   ├── replayer.cpp
+│   │   └── replayer.hpp
+│   ├── solver/                # 解算模块
+│   │   ├── CMakeLists.txt
+│   │   ├── solver.cpp
+│   │   ├── solver.hpp
+│   │   └── type.hpp
+│   └── tracker/               # 跟踪模块
+│       ├── CMakeLists.txt
+│       ├── TrackerMatcher.hpp
+│       ├── TrackerMatcherWithWholeCar.hpp
+│       ├── old/
+│       ├── tracker.cpp
+│       ├── tracker.hpp
+│       └── type.hpp
+├── utils/                     # 工具库
+│   ├── buff_models/           # 打符模型目录
+│   │   ├── blue_buff_debug/
+│   │   ├── blue_buff_useless/
+│   │   ├── blue_model_best/
+│   │   ├── buff_mix_416_openvino_model/
+│   │   └── red_buff/
+│   ├── include/               # 工具头文件目录
+│   │   ├── Location/
+│   │   │   └── location.hpp
+│   │   ├── Log/
+│   │   │   └── log.hpp
+│   │   ├── Param/
+│   │   │   └── param.hpp
+│   │   ├── README.md
+│   │   ├── Recorder/
+│   │   │   └── recorder.hpp
+│   │   ├── TimeStamp/
+│   │   │   └── TimeStamp.hpp
+│   │   ├── Udpsend/
+│   │   │   └── udpsend.hpp
+│   │   ├── VideoStreamer/
+│   │   │   ├── VideoStreamer.hpp
+│   │   │   └── httplib.h
+│   │   └── nlohmann/
+│   │       └── json.hpp
+│   ├── models/                # 模型文件目录
+│   │   ├── BRpoints_nano.bin
+│   │   ├── BRpoints_nano.xml
+│   │   ├── armor_yolo_x.bin
+│   │   ├── armor_yolo_x.xml
+│   │   ├── new_model.bin
+│   │   ├── new_model.xml
+│   │   ├── svm_numbers_rbf.xml
+│   │   ├── yolo11n-416sgd4.bin
+│   │   └── yolo11n-416sgd4.xml
+│   └── scripts/               # 脚本目录
+│       ├── editor.html
+│       ├── removeZoneIdentifier.sh
+│       ├── reverseInternet.ps1
+│       ├── server.log
+│       ├── server.py
+│       ├── solverFit/
+│       │   └── process-PitchYawFit.py
+│       └── startGTK.sh
+├── record/                    # 记录目录
+│   ├── serial/                # 串口记录
+│   ├── test1.mkv              # 测试视频
+│   └── video/                 # 视频记录
+├── bin/                       # 编译输出目录
+├── CMakeLists.txt             # CMake 配置文件
+├── config.json                # 配置文件
+├── json.hpp                   # JSON 头文件
+└── AutoAim.cpp                # 主程序文件
 ```
 
 ### 模块扩展

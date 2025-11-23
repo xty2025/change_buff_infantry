@@ -1,6 +1,8 @@
 #define NO_LOG
+//#define fs std::filesystem
 #include <iostream>
 #include <ranges>
+#include <opencv2/opencv.hpp> 
 #include <modules/modules.hpp>
 #include <opencv2/opencv.hpp>
 #include <Udpsend/udpsend.hpp>
@@ -13,14 +15,10 @@
 using namespace modules;
 using namespace aimlog;
 using namespace recording;
-
 namespace fs = std::filesystem;
-
-
 // 控制指令最好不要以超高频率发送
 // 控制指令间隔不能较长，须保证串口处于激活状态
 // 对多线程共享变量的赋值不能极高频率，否则可能导致另一个线程无法访问。
-
 std::map<std::string, int> enemyTrans = {
         {"red", 0},
         {"blue", 1},
@@ -281,7 +279,17 @@ void gimbalCalib(std::unique_ptr<Driver> &driver)
         //bool jump = false;
         while(period_count<motionEndPeriod)
         {
+
+            // getNewestSerialData 在驱动中标记为 deprecated，仅在校准工具中使用，屏蔽弃用警告
+//xty:
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
             bool exist_new_data = driver->getNewestSerialData(serial_data);
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
             if(!exist_new_data){usleep(100);continue;}
             if(first_yaw_get == false)
             {
@@ -368,7 +376,18 @@ void gimbalCalib(std::unique_ptr<Driver> &driver)
             control_data.pitch_setpoint = 0;
             control_data.shoot_flag = 0;
             control_data.valid = true;
+            // sendSerialData 在驱动中标记为 deprecated，仅在校准工具中使用，屏蔽弃用警告
+//xty：
+//编译问题
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
             driver->sendSerialData(control_data);
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
+
             if((period_count>=recordBeginPeriod) && (period_count<recordEndPeriod))
             {
                 record_queue.push({control_data.yaw_setpoint, serial_data.yaw_now, Time::TimeStamp::now()});
@@ -391,8 +410,6 @@ void gimbalCalib(std::unique_ptr<Driver> &driver)
     }
     std::cout<<"标定完成"<<std::endl;
 }
-
-
 // 算法：
 // 瞄准装甲板发1~2发弹，记录下发弹时间和装甲板掉识别时间（击打闪烁）减去估算飞行时间
 // 拨盘速度由弹速更新判断是否发弹。
@@ -400,7 +417,6 @@ void shootCalib(void)
 {
     std::cout<<"发弹延迟&拨盘速度校准"<<std::endl;
     std::cout<<"车辆上电，按下回车键开始标定"<<std::endl;
-
 }
 void rollCalib(void)
 {

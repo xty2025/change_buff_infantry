@@ -1,11 +1,21 @@
 #include "driver.hpp"
 using namespace driver;
 
-
-auto driver::createDriver() -> std::unique_ptr<Driver> 
-{ 
-    return std::make_unique<driver::Driver>(createSerial(), createCamera()); 
+//声明一个driver->Driver,后面用Driver的createDriver()函数创建一个Driver对象
+auto driver::createDriver()->std::unique_ptr<Driver>{
+    return std::make_unique<driver::Driver>(createSerial(), createCamera());
 }
+/*std::unique_ptr<Driver> auto driver::createDriver(){
+    return std::make_unique<driver::Driver>(createSerial(), createCamera());
+}*/
+
+/*
+//格式化函数：
+Type Driver::drive_Func()->std::unique_ptr<Driver>(class &h){
+    return this->(if serial)?serial:camera->drive_Func(h);
+}    
+*/
+
 
 bool Driver::getNewestSerialData(ParsedSerialData& serial_data)
 {

@@ -1332,3 +1332,39 @@
 2025-05-28 01:11:11,272 [INFO] 172.20.192.1 - - [28/May/2025 01:11:11] "GET /video_feed HTTP/1.1" 200 -
 2025-05-28 01:11:11,341 [INFO] 172.20.192.1 - - [28/May/2025 01:11:11] "GET /api/config HTTP/1.1" 200 -
 2025-05-28 01:11:32,083 [ERROR] 视频流错误: ("Connection broken: InvalidChunkLength(got length b'', 0 bytes read)", InvalidChunkLength(got length b'', 0 bytes read))
+2025-11-21 19:20:30,946 [INFO] find ip:None
+2025-11-21 19:20:30,951 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8080
+ * Running on http://192.168.40.128:8080
+2025-11-21 19:20:30,951 [INFO] [33mPress CTRL+C to quit[0m
+2025-11-21 19:20:32,778 [INFO] 127.0.0.1 - - [21/Nov/2025 19:20:32] "GET / HTTP/1.1" 200 -
+2025-11-21 19:20:32,834 [ERROR] 视频流错误: HTTPConnectionPool(host='127.0.0.1', port=8081): Max retries exceeded with url: /stream (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x76f516cd5310>: Failed to establish a new connection: [Errno 111] Connection refused'))
+2025-11-21 19:20:32,834 [INFO] 127.0.0.1 - - [21/Nov/2025 19:20:32] "GET /video_feed HTTP/1.1" 200 -
+2025-11-21 19:20:34,306 [INFO] 127.0.0.1 - - [21/Nov/2025 19:20:34] "GET /api/config HTTP/1.1" 200 -
+2025-11-21 19:20:34,723 [INFO] 127.0.0.1 - - [21/Nov/2025 19:20:34] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2025-11-21 19:42:58,799 [INFO] find ip:None
+2025-11-21 19:42:58,803 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8080
+ * Running on http://192.168.40.128:8080
+2025-11-21 19:42:58,803 [INFO] [33mPress CTRL+C to quit[0m
+2025-11-21 19:43:07,450 [INFO] 127.0.0.1 - - [21/Nov/2025 19:43:07] "GET / HTTP/1.1" 200 -
+2025-11-21 19:43:07,493 [ERROR] 视频流错误: HTTPConnectionPool(host='127.0.0.1', port=8081): Max retries exceeded with url: /stream (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7e9aec664b90>: Failed to establish a new connection: [Errno 111] Connection refused'))
+2025-11-21 19:43:07,493 [INFO] 127.0.0.1 - - [21/Nov/2025 19:43:07] "GET /video_feed HTTP/1.1" 200 -
+2025-11-21 19:43:07,695 [INFO] 127.0.0.1 - - [21/Nov/2025 19:43:07] "GET /api/config HTTP/1.1" 200 -
+2025-11-21 19:43:18,566 [INFO] 127.0.0.1 - - [21/Nov/2025 19:43:18] "GET /api/config HTTP/1.1" 200 -
+2025-11-21 19:43:19,848 [INFO] 127.0.0.1 - - [21/Nov/2025 19:43:19] "GET /api/config HTTP/1.1" 200 -
+2025-11-21 19:43:20,072 [INFO] 127.0.0.1 - - [21/Nov/2025 19:43:20] "GET /api/config HTTP/1.1" 200 -
+2025-11-21 19:43:24,475 [INFO] 127.0.0.1 - - [21/Nov/2025 19:43:24] "POST /api/config HTTP/1.1" 200 -
+2025-11-21 19:43:24,475 [INFO] 127.0.0.1 - - [21/Nov/2025 19:43:24] "POST /api/config HTTP/1.1" 200 -
+2025-11-21 20:04:16,676 [INFO] find ip:None
+2025-11-21 20:04:16,679 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8080
+ * Running on http://192.168.40.128:8080
+2025-11-21 20:04:16,679 [INFO] [33mPress CTRL+C to quit[0m
+2025-11-21 20:04:18,812 [INFO] 127.0.0.1 - - [21/Nov/2025 20:04:18] "GET / HTTP/1.1" 200 -
+2025-11-21 20:04:18,841 [ERROR] 视频流错误: HTTPConnectionPool(host='127.0.0.1', port=8081): Max retries exceeded with url: /stream (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x781530264c90>: Failed to establish a new connection: [Errno 111] Connection refused'))
+2025-11-21 20:04:18,841 [INFO] 127.0.0.1 - - [21/Nov/2025 20:04:18] "GET /video_feed HTTP/1.1" 200 -
+2025-11-21 20:04:19,003 [INFO] 127.0.0.1 - - [21/Nov/2025 20:04:19] "GET /api/config HTTP/1.1" 200 -

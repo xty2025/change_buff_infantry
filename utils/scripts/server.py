@@ -6,11 +6,13 @@ import requests
 import signal
 import subprocess
 from datetime import datetime
-from flask_cors import CORS
+from flask_cors import CORS #由于 Flask 后端和 Vue 前端可能会在不同的端口上运行
+#（比如 Flask 在 5000 端口，Vue 在 8080 端口），会遇到 跨域请求 问题，CORS解决跨域问题。
 import time
 import hashlib
 
 # 日志配置
+#flask前端日志
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
@@ -21,6 +23,10 @@ logging.basicConfig(
 )
 
 app = Flask(__name__, template_folder='.')
+#xty:
+#filepath='/home/user/桌面/new_INFANTRY/AutoAim_infantry'
+#template_folder='filepath'
+
 CORS(app)
 def get_local_ip():
     """
@@ -28,7 +34,6 @@ def get_local_ip():
     如果存在多个符合条件的地址，则返回第一个符合的地址；否则返回 None
     """
     import socket
-
     # 第一种方式：从 gethostbyname_ex 获取所有地址
     try:
         hostname = socket.gethostname()
@@ -54,6 +59,7 @@ def get_local_ip():
     return None
 
 # 动态配置
+
 CONFIG_PATH = os.getenv('CONFIG_PATH', '../../config.json')
 local_ip = get_local_ip()
 print("find ip",local_ip)
@@ -86,7 +92,8 @@ def save_config(data):
     except Exception as e:
         logging.error(f"保存失败: {str(e)}")
         return False
-    
+
+
 def kill_aim():
     """杀掉所有aim相关进程"""
     try:
@@ -95,6 +102,21 @@ def kill_aim():
             "ps -ef | grep Au | grep -v grep | awk '{print $2}'", 
             shell=True
         ).decode().strip().split()
+
+
+        #xty:
+        '''
+        threads=subprocess.check_output(
+            "ps -ef | grep thread | grep Au | awk '{print $2}'",
+            shell=True
+        ).decode().strip().split()
+        ##csv格式的pids  #top 后面一个为一行pids
+        for thread in threads:
+            if thread not in threads:
+                pids.append(thread)
+        '''        
+
+
         for pid in pids:
             subprocess.run(['sudo', 'kill', pid])
         return True
@@ -103,12 +125,19 @@ def kill_aim():
         logging.error(f"可能需要sudo visudo配置免密码权限，添加：hustlyrm ALL=(ALL) NOPASSWD: /bin/kill")
         return False
     
+#flask 注册的前端页面127.0.0。1：8081/stream
+'''index() (Flask 路由 '/')
 
+作用：渲染 editor.html 模板并注入 server_time 变量（当前时间字符串）。
+返回：HTML 页面响应。
+要点：该 HTML 负责前端 UI，通常会使用 /video_feed 来显示视频。'''
 @app.route('/')
 def index():
     return render_template('editor.html', 
                          server_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
+'''将上游返回的分片数据以原样分片（iter_content）逐块转发给浏览器，
+响应的 mimetype 为 multipart/x-mixed-replace，使浏览器能直接显示 MJPEG 实时画面。'''
 @app.route('/api/config', methods=['GET'])
 def get_config():
     config_data = load_config()
@@ -125,7 +154,11 @@ def update_config():
         
         if save_config(new_config):
             kill_aim()
+            '''用：接收前端提交的 JSON 配置并保存（save_config），
+            保存成功后调用 kill_aim() 清理旧进程'''
             return jsonify({"status": "success"})
+        #flask.__init__().jsonify
+
         return jsonify({"error": "保存失败"}), 500
     except Exception as e:
         logging.error(f"服务器错误: {str(e)}")
@@ -135,18 +168,19 @@ def update_config():
 def video_feed():
     def generate():
         try:
-            resp = requests.get(VIDEO_SOURCE, stream=True, timeout=10)
-            if resp.status_code == 200:
-                for chunk in resp.iter_content(chunk_size=1024 * 512):
-                    yield chunk
+            res = requests.get(VIDEO_SOURCE, stream=True, timeout=10)
+            if res.status_code == 200:
+                for chunk in res.iter_content(chunk_size=1024 * 512):
+                    yield chunk #another thread yield to flask Response
+                    #把字节传入浏览器。
             else:
-                logging.warning(f"视频源异常: {resp.status_code}")
+                logging.warning(f"视频源异常: {res.status_code}")
         except Exception as e:
             logging.error(f"视频流错误: {str(e)}")
-    
+    #用：接收前端提交的 JSON 配置并保存（save_config），保存成功后调用 kill_aim() 清理旧进程
     return Response(
         generate(),
-        mimetype='multipart/x-mixed-replace; boundary=frame',
+        mimetype='multipart/x-mixed-replace; boundary=frame',#mjpeg格式。
         headers={'Cache-Control': 'no-cache'}
     )
 if __name__ == '__main__':
@@ -159,7 +193,7 @@ if __name__ == '__main__':
         web_debug = param.get("web_debug", True)
     else:
         web_debug = True
-
+    
     if web_debug is False:
         logging.info("配置中 web_debug 为 false，终止 server 启动")
         exit(0)

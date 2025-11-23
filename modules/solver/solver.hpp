@@ -1,6 +1,7 @@
 #pragma once
 #include <Eigen/Core>
 #include <Eigen/Geometry>
+#include<Eigen/Dense>
 #include <opencv2/opencv.hpp>
 #include "type.hpp"
 #include "driver/type.hpp"
@@ -8,24 +9,25 @@
 #include "tracker/type.hpp"
 #include "Param/param.hpp"
 
-
 namespace solver {
 	using driver::ParsedSerialData;
-	using tracker::ArmorXYV;
+	using tracker::ArmorXYV;//visible
 class Solver : public BaseSolver
 {
 private:
+//必须在前面声明，才能在后面的构造函数中应用。
     Eigen::Matrix3d cameraIntrinsicMatrix;
     Eigen::Vector3d cameraOffset;
     Eigen::Vector5d distorationCoefficients;// k1,k2,p1,p2,k3
     Eigen::Vector3d cameraRotation;
     Eigen::Matrix3d cameraRotationMatrix;
-    double f_x, f_y, c_x, c_y;
+    double f_x, f_y, c_x, c_y;//相机内参
 public:
     explicit Solver(param::Param& json_param)
     {
         // Load camera intrinsic matrix from parameter file
-        auto intrinsicArray = json_param["camera_intrinsic_matrix"].to<std::vector<std::vector<double>>>();
+        //auto intrinsicArray = json_param["camera_intrinsic_matrix"].to<std::vector<std::vector<double>>>();
+        auto intrinsicArray =json_param["camera_intrinsic_matrix"].to<std::vector<std::vector<double>>>();
         for (int i = 0; i < 3; ++i)
             for (int j = 0; j < 3; ++j)
                 cameraIntrinsicMatrix(i, j) = intrinsicArray[i][j];
@@ -67,6 +69,16 @@ public:
 		out.z = in.distance * sin(in.pitch);
 		return out;
 	}
+    //xty:
+    /*
+    inline XYZ2PYD(const CXYD& in)const override{
+        double distance=sqrt(in.x*in.x+in.y*in.y+in.z*in.z);
+        double pitch=asin(in.z/distance);
+        double yaw=atan2(in.y,in.x);
+        bool visible=(in.k>2);
+        return PYD(pitch,yaw,distance);
+    }
+    */
 	inline XYZ CXYD2XYZ(const CXYD& in) const override
 	{
 		//eliminate distortion
@@ -80,7 +92,7 @@ public:
 	{
         double cx = c_x - in.y / in.x * f_x;
         double cy = c_y - in.z / in.x * f_y;
-        //distortion
+        //distortion: xty
 //        double r2 = cx * cx + cy * cy;
 //        double r4 = r2 * r2;
 //        double r6 = r4 * r2;
@@ -97,6 +109,10 @@ public:
 	}
     inline XYZ camera2world(const XYZ& in, const PYD& imuData) const override
     {
+        //把输入的XYZ坐标转换成Eigen向量
+        //相机旋转矩阵和偏移量将相机坐标系转换到云台坐标系。
+        //再根据IMU数据，将云台坐标系转换到世界坐标系。
+        //最后，将世界坐标系的坐标转换回XYZ格式。
         double imu_yaw = imuData.yaw;
         double imu_pitch = imuData.pitch;
         //double imu_roll = 0;
@@ -109,6 +125,14 @@ public:
     }
     inline XYZ world2camera(const XYZ& in, const PYD& imuData) const override
     {
+        //- 1.
+        //将输入的XYZ坐标转换为Eigen向量
+        //- 2.
+        //使用IMU数据（pitch和-yaw）进行反向坐标变换，将点从世界坐标系转换到云台坐标系
+        //- 3.
+        //应用相机旋转矩阵的逆矩阵和偏移量，将点从云台坐标系转换到相机坐标系
+        //- 4.
+        //返回相机坐标系下的XYZ坐标 
         double imu_yaw = imuData.yaw;
         double imu_pitch = imuData.pitch;
         Eigen::Vector3d in_eigen = Eigen::Vector3d(in.x, in.y, in.z);
@@ -121,11 +145,13 @@ public:
     }
 	
 	std::pair<XYZ,double> camera2world(const ArmorXYV& trackResult, const ImuData& imuData, bool isLarge);
+    //重载用trackResult
     std::pair<XYZ,double> camera2worldWithWholeCar(const ArmorXYV& trackResult, const ImuData& imuData, const cv::Rect& bounding_rect, bool isLarge);
-
+    //整车解算加入预测框的角点tracker::Tracker TrackResults getTrackResult  
 	void setCameraIntrinsicMatrix(const Eigen::Matrix3d& cameraIntrinsicMatrix);
     void setCameraOffset(const Eigen::Vector3d& cameraOffset);
     void setDistorationCoefficients(const Eigen::Vector5d& distorationCoefficients);
+    //在solver.cpp中实现，并且更新这些参数。
 };
 std::shared_ptr<Solver> createSolver(param::Param json_param);
 

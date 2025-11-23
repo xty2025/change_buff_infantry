@@ -1,7 +1,5 @@
 #pragma once
-
 #include <ceres/ceres.h>
-
 #include <chrono>
 #include <fstream>
 #include <Eigen/Core>

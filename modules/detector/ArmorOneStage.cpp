@@ -10,12 +10,16 @@ namespace detector
 {
     //params
     static bool useOldModel = false;
+    static bool USE_OLD_MODEL=false;
     static constexpr int INPUT_W = 416;   // Width of input
     static constexpr int INPUT_H = 416;   // Height of input
+    //change
     static int NUM_CLASSES = 8; // Number of classes
     static int NUM_COLORS = 8;  // Number of color
-//    static int NUM_CLASSES = USE_OLD_MODEL? 8 : 1;
-//    static int NUM_COLORS = USE_OLD_MODEL? 8 : 2;  // Number of color
+    // static int NUM_COLORS=2; 
+    //hero,infantry,infantry,sentry,engineer,drone,base_small,base_big
+    //static int NUM_CLASSES = USE_OLD_MODEL? 8 : 1;
+    //static int NUM_COLORS = USE_OLD_MODEL? 8 : 2;  // Number of color
     static constexpr int TOPK = 128;      // TopK
     static constexpr float NMS_THRESH = 0.3;
     static constexpr float BBOX_CONF_THRESH = 0.5;
@@ -25,12 +29,13 @@ namespace detector
     ArmorOneStage::ArmorOneStage(const std::string &model_file, bool useOldModel_, bool allowGray)
         : allowGray(allowGray)
     {
-        useOldModel = useOldModel_;
+        useOldModel = useOldModel_;//bool.
         NUM_CLASSES = useOldModel ? 8 : 1;
         NUM_COLORS = useOldModel ? 8 : 2;
         initModel(model_file);
         number_classifier = std::make_unique<NumberClassifier>("svm");
     }
+    //创建NumberClassifier实例
 
     ArmorOneStage::~ArmorOneStage()
     {
@@ -55,6 +60,12 @@ namespace detector
         );
         infer_request = compiled_model.create_infer_request();
     }
+    /*process:
+- 设置CPU为推理设备
+- 读取模型文件
+- 设置预处理和后处理
+- 编译模型用于CPU推理
+- 创建推理请求*/
 
     static inline int argmax(const float *ptr, int len)
     {
@@ -65,8 +76,8 @@ namespace detector
                 max_arg = i;
         }
         return max_arg;
-    }
-
+    }//找最大的idx
+//填充和缩放
     inline cv::Mat scaledResize(const cv::Mat &img, Eigen::Matrix<float, 3, 3> &transform_matrix)
     {
         float r = std::min(INPUT_W / (img.cols * 1.0), INPUT_H / (img.rows * 1.0));
@@ -109,6 +120,7 @@ namespace detector
         }
     }
 
+    //生成候选框
     static void generateYoloxProposals(std::vector<GridAndStride> grid_strides, const float *feat_ptr,
                                        Eigen::Matrix<float, 3, 3> &transform_matrix, float prob_threshold,
                                        BBoxes &bboxes,int& color_flag, bool& allowGray)
@@ -189,7 +201,7 @@ namespace detector
         } // point anchor loop
     }
 
-
+//快排：按置信度下降排候选框
     static void qsort_descent_inplace(BBoxes &facebboxes, int left, int right)
     {
         int i = left;
@@ -225,13 +237,13 @@ namespace detector
 
         qsort_descent_inplace(bboxes, 0, bboxes.size() - 1);
     }
-
+//交叉面积
     static inline float intersection_area(const BBox &a, const BBox &b)
     {
         cv::Rect_<float> inter = a.rect & b.rect;
         return inter.area();
     }
-
+//非极大值抑制去除
     static void nms_sorted_bboxes(BBoxes &faceobjects, std::vector<int> &picked, float nms_threshold)
     {
         picked.clear();
@@ -276,11 +288,11 @@ namespace detector
         }
     }
 
-
+//解码，生成最终的候选框
     BBoxes decodeOutputs(const float *prob, BBoxes &objects, Eigen::Matrix<float, 3, 3> &transform_matrix, int& color_flag, bool& allowGray)
     {
         BBoxes proposals;
-        std::vector<int> strides = {8, 16, 32};
+        std::vector<int> strides = {8, 16, 32};//步长
         std::vector<GridAndStride> grid_strides;
 
         generate_grids_and_stride(INPUT_W, INPUT_H, strides, grid_strides);
@@ -301,6 +313,31 @@ namespace detector
         return proposals;
     }
 
+
+    //重载（）运算：
+    /*- 1.
+时间戳记录 ：记录开始时间用于性能统计
+- 2.
+图像预处理 ：
+- 使用scaledResize进行图像缩放
+- 转换为32位浮点数
+- 分离图像通道
+- 3.
+模型推理 ：
+- 设置输入张量
+- 执行推理
+- 获取输出结果
+- 4.
+输出解码 ：
+- 调用decodeOutputs处理模型输出
+- 5.
+后处理和数字识别 ：
+- 对候选框角点进行平均以降低误差
+- 检查角点是否在图像范围内
+- 使用number_classifier进行数字识别
+- 过滤掉数字识别失败的候选框
+- 6.
+返回结果 ：返回检测到的装甲板列表*/
     BBoxes ArmorOneStage::operator()(const cv::Mat &img)
     {
         Time::TimeStamp time_stamp = Time::TimeStamp::now();
@@ -308,7 +345,7 @@ namespace detector
         cv::Mat pre;
         cv::Mat pre_split[3];
         pre_img.convertTo(pre, CV_32F);
-        cv::split(pre, pre_split);
+        cv::split(pre, pre_split);///RGB
         //INFO("ArmorOneStage pre_img size: {}x{}", pre_img.cols, pre_img.rows);
         input_tensor = infer_request.get_input_tensor(0);
         infer_request.set_input_tensor(input_tensor);

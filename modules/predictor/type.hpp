@@ -26,8 +26,8 @@ namespace predictor
         double z1, z2;
         double theta, omega;
         double r1, r2;
-        std::array<Armor, 4> armors;
-        bool stable = true;
+        std::array<Armor, 4> armors;//4个角点。
+        bool stable = true;//检测车体是否稳定的判断
     };
 
     typedef std::vector<Prediction> Predictions;

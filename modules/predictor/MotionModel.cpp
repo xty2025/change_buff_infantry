@@ -1,6 +1,9 @@
 #include "MotionModel.hpp"
-
+//预测状态12维度
+//观测7维度
+//计算卡尔曼滤波器的流程
 namespace predictor{
+    //inline主要减小在不同类之间反复调用的开销
     inline Eigen::Matrix3d build_Q_PVA(double q_jerk_base, double dt) {
         Eigen::Matrix3d Q_sub;
         double dt2 = dt * dt;
@@ -140,7 +143,6 @@ void MotionModel::initMotionModel()
     Q_val(7,7) = q_r2_drift_base_ * dt; 
     Q_val(8,8) = q_z1_drift_base_ * dt;
     Q_val(9,9) = q_z2_drift_base_ * dt;
-
             // 测量变量顺序: ax, ay, az, tangent, angle_left, angle_right
     MatrixYY R = MatrixYY::Zero();
     R << 0.01,  0,     0,     0,     0,     0, 0,

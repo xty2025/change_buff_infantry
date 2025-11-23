@@ -28,7 +28,10 @@ namespace modules
     using namespace solver;
     using namespace replayer;
     using namespace power_rune;
-
+    // buff 模块源码使用了 namespace power_rune，例如 BuffDetector 定义在 power_rune 中。
+    // 为了兼容旧的 `using namespace buff;` 引用，创建别名：
+    namespace buff = power_rune;
+    using namespace buff;
 } // namespace modules
 
 

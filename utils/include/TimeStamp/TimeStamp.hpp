@@ -1,6 +1,7 @@
 #ifndef TIMESTAMP_HPP
 #define TIMESTAMP_HPP
 
+
 #include <iostream>
 #include <chrono>
 #include <ctime>
@@ -23,7 +24,7 @@ public:
     }
     double count() const {
         return std::chrono::duration<double, std::milli>(duration).count();
-    }
+    }//返回毫秒数的时间差。
     double toSeconds() const {
         // auto us = std::chrono::duration_cast<std::chrono::microseconds>(duration).count();
         // return static_cast<double>(us) / 1'000'000;

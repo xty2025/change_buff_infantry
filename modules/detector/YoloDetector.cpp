@@ -15,7 +15,17 @@ static cv::Mat letterbox(const cv::Mat &source) {
     source.copyTo(result(cv::Rect(0, 0, cols, rows)));
     return result;
 }
-
+//返回MAT对象，把原图像考入
+/* //why usw automic:
+static cv::Mat lll(const cv::Mat&src){
+    int col=src.col;
+    int row=src.row;
+    int max_dim=std::max(col,row);
+    cv::Mat result=cv::Mat::zeros(max_dim,max_dim,src.type());
+    std::atomic::result=src;
+    result.copyTo(result(cv::Rect(0,0,col,row)));
+    return result;
+}*/
 YoloDetector::YoloDetector(const std::string& model_path, Precision precision, bool use_gpu)
 {
     // 设置 OpenVINO 运行时的设备
@@ -36,7 +46,7 @@ YoloDetector::YoloDetector(const std::string& model_path, Precision precision, b
         default:
             throw std::invalid_argument("Unsupported precision type");
     }
-    // 读取模型并编译
+    // 读取模型并编译，用ov的core模块：
     model = core.read_model(model_path);
     compiled_model = core.compile_model(
         model,
@@ -63,9 +73,11 @@ std::vector<YoloDetection> YoloDetector::infer(const cv::Mat& image)
     float scale = static_cast<float>(letterbox_img.cols) / INPUT_W;
     cv::Mat blob = cv::dnn::blobFromImage(letterbox_img, 1.0 / 255.0,
                                           cv::Size(INPUT_W, INPUT_H), cv::Scalar(), true, false);
+    //将图像转换为模型输入所需的blob格式
 
     // 2. 设置输入 tensor（假设模型只有一个输入）
     auto input_port = compiled_model.input();
+    //转张量：
     ov::Tensor input_tensor(input_port.get_element_type(), input_port.get_shape(), blob.ptr(0));
     infer_request.set_input_tensor(input_tensor);
 
@@ -115,6 +127,7 @@ std::vector<YoloDetection> YoloDetector::infer(const cv::Mat& image)
             class_ids.push_back(class_id_point.x);
         }
     }
+    //遍历四个数据，获取置信度高于阈值的得分。
 
     // 6. 非极大值抑制（NMS）
     std::vector<int> indices;

@@ -12,7 +12,6 @@
 using namespace modules;
 using namespace aimlog;
 using namespace recording;
-
 //TODO:
 //1.完善选板逻辑 controller
 //2.加入整车预测 predictor
@@ -41,6 +40,12 @@ int main() {
     bool record_enable = param["record_enable"].Bool();
     bool force_shoot = param["force_shoot"].Bool();
     bool draw_debug_image = param["debug_on_image"].Bool();
+    /*bool udp_enable = param["UDP"]["enable"].Bool();: 从配置中读取 UDP 字段下的 enable 键，并将其布尔值赋给 udp_enable 变量。这决定了是否启用 UDP 通信。
+bool web_debug_enable = param["web_debug"].Bool();: 读取 web_debug 键的布尔值，决定是否启用网页调试功能。
+bool shoot_enable = param["shoot_enable"].Bool();: 读取 shoot_enable 键的布尔值，决定是否允许射击。
+bool record_enable = param["record_enable"].Bool();: 读取 record_enable 键的布尔值，决定是否启用录像功能。
+bool force_shoot = param["force_shoot"].Bool();: 读取 force_shoot 键的布尔值，决定是否强制射击（即使没有瞄准目标）。
+bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image 键的布尔值，决定是否在图像上绘制调试信息。*/
     if(udp_enable)
         UdpSend::instance(param["UDP"]["ip"].String(), param["UDP"]["port"].Int());
     else
@@ -66,22 +71,27 @@ int main() {
     //xjj
     std::string red_buff_model_path = (param["buff"])["red_buff_model_path"].String();
     std::string blue_buff_model_path = (param["buff"])["blue_buff_model_path"].String();    
-    bool EfficiencyFirst = param["buff"]["EfficiencyFirst"].Bool();
-    BuffDetector buff_detector(red_buff_model_path, blue_buff_model_path);  //同下
+    bool EfficiencyFirst = param["buff"]["EfficiencyFirst"].Bool();// 是否性能优先,可给步兵打大符的优先级。
+    BuffDetector buff_detector(red_buff_model_path, blue_buff_model_path); // 创建大能量机关检测器
     BuffCalculator buff_calculator(param);   //属于solver 越級了, 后面加新模塊buff再移
     BuffController buff_controller;
-    bool hitBuff = false;
-    int buff_mode = 0;
-    bool buff_success = false;
-    bool reload_big_buff = true;
+    bool hitBuff = false;// 是否正在攻击大能量机关
+    int buff_mode = 0;// 大能量机关模式
+    bool buff_success = false;// 大能量机关计算是否成功
+    bool reload_big_buff = true;// 是否重新加载大能量机关
     // 新增共享变量
+
+// 新增共享变量，用于在不同线程间传递大能量机关的瞄准角度
     std::shared_ptr<float> buff_pitch = std::make_shared<float>(0.0);
     std::shared_ptr<float> buff_yaw = std::make_shared<float>(0.0);
-    //xjj
+    
 
+    //xjj
+  // 将姿态解算器注册到location模块，用于坐标系转换
     location::Location::registerSolver(solver);
     ParsedSerialData imu;
 
+// 将预测器的预测函数注册到控制器中，使控制器可以使用预测结果
     controller->registPredictFunc(predictor->predictFunc());
 //    auto predictFunc = predictor->predictFunc();
 //    controller->registPredictFunc([&predictFunc,&solver,&imu](Time::TimeStamp timestamp) {
@@ -89,15 +99,18 @@ int main() {
 //        return result;
 //    });
 
+
+// 配置串口和相机
     SerialConfig config{param["serial_name"].String(), param["baud_rate"].Int()};
     CameraConfig cameraConfig{
-        .cameraSN = param["camera_id"].String(), 
-        .autoWhiteBalance = param["auto_white_balance"].Bool(),
+        .cameraSN = param["camera_id"].String(), //前后相机
+        .autoWhiteBalance = param["auto_white_balance"].Bool(),//白平衡开启
         .exposureTime = param["exposure_time"].Double(),
         .gain = param["gain"].Double()
     };
     driver->setSerialConfig(config);
     driver->setCameraConfig(cameraConfig);
+    // 注册串口读取回调函数，该函数在收到新串口数据时被调用
     driver->registReadCallback([control_func = driver->sendSerialFunc() ,controller, &buff_success, buff_controller, &hitBuff, buff_pitch, buff_yaw, shoot_enable,force_shoot,record_enable](const ParsedSerialData& parsedData) {
         
         ControlResult result;  
@@ -108,14 +121,18 @@ int main() {
         //xjj
         if(!hitBuff)
         {
+            //如果不打符，调用常规控制器计算控制结果。
             result = controller->control(parsedData);
             if(force_shoot) result.shoot_flag = 1;
+            // 如果强制射击，则设置射击标志
             result.shoot_flag = shoot_enable? result.shoot_flag : 0;
+            // 根据配置决定是否允许射击
             control_func(result);
             std::cout<<"7777"<<std::endl;
         }
         else //buff
         {
+            // 调用大能量机关控制器计算控制结果
             std::cout<<"8888888888888"<<std::endl;
             BuffControlResult buff_result = buff_controller.buff_control(parsedData, buff_pitch, buff_yaw);
             if(force_shoot) buff_result.shoot_flag = 1;
@@ -157,7 +174,6 @@ int main() {
             continue;
         }
         clearScreenNoDelete();
-
         //if multiple frame, get the latest one and discard the others
         std::queue<std::shared_ptr<TimeImageData>> camera_data_pack;
         driver->getCameraData(camera_data_pack);
@@ -428,3 +444,63 @@ int main() {
     }
     return 0;
 }
+
+/*
+配置读取: 首先，它从 config.json 文件中读取所有配置参数，并根据这些参数决定是否启用 UDP、网页调试、录像等功能。
+模块实例化: 动态创建了所有核心模块的实例：driver (驱动)、solver (解算器)、controller (控制器)、predictor (预测器)、detector (检测器)、tracker (追踪器)。
+硬件线程: 启动了两个关键线程：runSerialThread() 负责处理串口通信（接收 IMU 数据，发送控制指令），runCameraThread() 负责获取相机图像。
+主循环: while(1) 循环是程序的核心，它持续获取最新的图像数据，并根据当前任务（打装甲板或大能量机关）来调用不同的处理逻辑。
+2. driver - 硬件驱动
+driver 模块是程序与外部硬件（相机和串口）的桥梁。
+
+相机数据: 它负责从相机中抓取图像，并将图像与对应的时间戳绑定。
+
+串口数据: 它持续接收来自机器人的 IMU 数据（姿态、颜色、请求等），并将这些数据与时间戳同步。
+
+数据同步: findNearestSerialData() 函数是一个关键功能，它根据图像的时间戳找到最接近的串口数据，确保视觉处理和姿态数据是同步的。
+
+回调函数: registReadCallback 注册的回调函数是串口数据驱动的控制逻辑。每当有新的串口数据到达，它就会调用这个回调来计算和发送控制指令。
+
+3. detector - 目标检测
+detector 模块负责在图像中识别出装甲板和整车。
+
+模型加载: 可能会加载深度学习模型 (.onnx 或其他格式) 来进行目标识别。
+
+检测功能: detect(frame->image) 函数是其核心功能，它接收一帧图像，并返回检测到的所有装甲板和整车的位置信息。
+
+4. tracker - 目标追踪
+tracker 模块负责将每一帧中检测到的目标串联起来，形成连续的运动轨迹。
+
+数据合并: merge() 函数将 detector 识别出的新目标数据与现有的追踪目标进行匹配和合并。
+
+轨迹管理: getTrackResult() 返回当前正在被追踪的目标的最新状态，包括它们的 ID、位置、类型等。这使得程序可以持续追踪特定目标，而不是在每一帧都重新识别。
+
+5. solver - 姿态解算
+solver 模块是机器人的“空间几何大脑”，负责将二维图像信息转换为三维空间信息。
+
+坐标系转换: camera2world() 函数是其核心功能。它接收一个装甲板在相机图像中的位置，结合 IMU 姿态信息，计算出该装甲板在世界坐标系中的三维位置。
+
+解算策略: 代码中提到了两种解算方法：一种是只用装甲板信息，另一种是结合整车信息 (camera2worldWithWholeCar)，这使得解算结果更准确。
+
+6. predictor - 运动预测
+predictor 模块负责根据目标的历史运动轨迹，预测其在未来的位置。
+
+数据更新: update() 函数持续接收来自 tracker 的最新追踪结果，并用这些数据来更新内部的运动模型。
+
+预测功能: predict() 函数是预测的核心，它接收一个未来时间戳，并返回目标在该时间点的预测位置。这使得控制器可以提前瞄准目标，弥补系统延时。
+
+7. controller - 机器人控制
+controller 模块负责根据目标位置计算出最终的控制指令。
+
+控制逻辑: control() 函数是其主要接口。它接收最新的 IMU 数据和预测的目标位置，并计算出机器人云台需要转动的俯仰角 (pitch) 和偏航角 (yaw)，以及是否需要发射子弹 (shoot_flag)。
+
+注册预测函数: registPredictFunc() 函数将 predictor 的预测功能注册到 controller 中，使得控制器可以直接调用预测结果来生成控制指令。
+
+8. buff 模块 - 大能量机关处理
+这是代码中一个独立且重要的功能模块，专门用于处理大能量机关。
+
+BuffDetector: 负责在图像中检测大能量机关的中心点和扇叶。
+
+BuffCalculator: 接收 BuffDetector 的结果，进行复杂的运动学和弹道学计算，以解算瞄准大能量机关所需的精确俯仰角和偏航角。
+
+BuffController: 根据 BuffCalculator 的结果生成控制指令，并发送给机器人*/

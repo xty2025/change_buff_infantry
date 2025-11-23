@@ -32,6 +32,7 @@ public:
         theta -= id * M_PI / 2;
         return theta;
     }
+    //装甲板与整车的匹配
     template<typename T>
     map<int,T*> track(const vector<tuple<Point,cv::Rect2f, T*>>& currentPoints, Time::TimeStamp time) {
         if(currentPoints.empty())
@@ -42,6 +43,7 @@ public:
         if(missFrame > maxMissFrame) newTrack = true;
         missFrame = 0;
         double dt = 0.0;
+        //是否重新跟踪，若为true，则直接使用当前点的theta作为预测值
         if(newTrack)
         {
             newTrack = false;
@@ -53,12 +55,15 @@ public:
             dt = (time - last_time).count();
         //INFO("delta_time:{}",dt);
         last_time = time;
+        //按照左右排序，先左后右
         double pred_theta = oldtheta + omega * dt;
         auto sortedPoints = currentPoints;
         sort(sortedPoints.begin(), sortedPoints.end(), [](const auto& a, const auto& b) {
             return get<0>(a).cx < get<0>(b).cx;
         });
         // after sort, the first element is the leftmost
+        //从0-3开始分配装甲板，起始索引为0-3中一个，使得分配的角度差总和最小。
+
         std::array<double,4> res_theta = {0,0,0,0};
         for(int i=0; i<4; i++)
         {
@@ -70,6 +75,10 @@ public:
                 res_theta[i] += std::abs(diff);
             }
         }
+        //get<0>(sortedPoints[j])- : 获取检测点的坐标
+        //get<1>(sortedPoints[j])- : 获取检测点的矩形框
+        //get<2>(sortedPoints[j])- : 获取检测点关联的数据指针,将检测点按最优方案分配ID并存储到结果中
+        //选取角度差总和最小的方案为最优匹配。
         int min_index = std::min_element(res_theta.begin(), res_theta.end()) - res_theta.begin();
         map<int,T*> result;
         double newtheta = 0;
@@ -86,7 +95,7 @@ public:
         else
             newomega = 0;
         while(std::abs(newomega)>maxOmega)newomega/=2;
-        omega = alpha * newomega + (1 - alpha) * omega;
+        omega = alpha * newomega + (1 - alpha) * omega;//主要是为了平滑 omega
         //INFO("newomega:{}",omega);
         oldtheta = newtheta;
         return result;

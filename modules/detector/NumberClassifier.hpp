@@ -1,7 +1,7 @@
 #pragma once
 
 #include <opencv2/opencv.hpp>
-
+//detector::Detection.isGray=None;
 namespace detector
 {
     class NumberClassifier
@@ -14,8 +14,10 @@ namespace detector
         cv::HOGDescriptor *hog_;
         void initHog();
         bool affineNumber(const cv::Mat &frame, const std::vector<cv::Point2f> &corners);
+        //透视变换
         float getDistance(const cv::Point2f &point_1, const cv::Point2f &point_2);
         void calcGammaTable(float gamma);
+         // 自适应Gamma校正
         uchar gamma_table[256];
         cv::Mat lut_table;
 

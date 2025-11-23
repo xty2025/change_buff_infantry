@@ -7,8 +7,53 @@
 #include <vector>
 #include <memory>
 #include <iostream>
-
+// 视频流服务器类
 class VideoStreamer {
+private:
+    inline static int port_ = 8081;
+    inline static std::string local_ip_ = "127.0.0.1";
+    inline static int jpeg_quality_ = 50;
+    //作用：JPEG 编码质量（0-100），用在 setFrame() 的 cv::imencode 中。
+    //质量越高，图像越清晰但数据更大；影响带宽和延迟。
+    inline static std::unique_ptr<httplib::Server> server_;
+    //开启后台启动和HTTP服务器的线程，并处理路由。
+    inline static std::thread server_thread_;
+    inline static std::mutex frame_mutex_;//两个并发线程间保护 current_frame_ 变量的互斥锁。
+    //inline static std::condition_variable frame_cond_;
+    inline static std::vector<uchar> current_frame_;
+    inline static bool server_running_ = false;
+    inline static bool initialized_ = false;
+
+
+private:
+    // 服务器启动函数，供线程调用
+    static void startServer() {
+        // 设置视频流接口
+        server_->Get("/stream", [](const httplib::Request& req, httplib::Response& res) {
+            res.set_chunked_content_provider(
+                "multipart/x-mixed-replace; boundary=frame",
+                [](size_t offset, httplib::DataSink& sink) -> bool {
+                    std::vector<uchar> frame_data;
+                    {
+                        std::lock_guard<std::mutex> lock(frame_mutex_);
+                        frame_data = current_frame_;
+                    }
+                    if (!frame_data.empty()) {
+                        std::string boundary = "\r\n--frame\r\n";
+                        std::string header = "Content-Type: image/jpeg\r\n\r\n";
+                        sink.write(boundary.data(), boundary.size());
+                        sink.write(header.data(), header.size());
+                        sink.write(reinterpret_cast<const char*>(frame_data.data()), frame_data.size());
+                    }
+                    return true;
+                }
+            );
+            });
+        std::cout << "Server started at http://" << local_ip_.c_str() << ":" << port_ << "/stream" << std::endl;
+        server_->listen(local_ip_.c_str(), port_);
+    }
+
+
 public:
     VideoStreamer() = delete; // 禁止实例化
 
@@ -45,47 +90,11 @@ public:
         }
     }
 
-private:
-    // 服务器启动函数，供线程调用
-    static void startServer() {
-        // 设置视频流接口
-        server_->Get("/stream", [](const httplib::Request& req, httplib::Response& res) {
-            res.set_chunked_content_provider(
-                "multipart/x-mixed-replace; boundary=frame",
-                [](size_t offset, httplib::DataSink& sink) -> bool {
-                    std::vector<uchar> frame_data;
-                    {
-                        std::lock_guard<std::mutex> lock(frame_mutex_);
-                        frame_data = current_frame_;
-                    }
-                    if (!frame_data.empty()) {
-                        std::string boundary = "\r\n--frame\r\n";
-                        std::string header = "Content-Type: image/jpeg\r\n\r\n";
-                        sink.write(boundary.data(), boundary.size());
-                        sink.write(header.data(), header.size());
-                        sink.write(reinterpret_cast<const char*>(frame_data.data()), frame_data.size());
-                    }
-                    return true;
-                }
-            );
-            });
-        std::cout << "Server started at http://" << local_ip_.c_str() << ":" << port_ << "/stream" << std::endl;
-        server_->listen(local_ip_.c_str(), port_);
-    }
 
-private:
-    inline static int port_ = 8081;
-    inline static std::string local_ip_ = "127.0.0.1";
-    inline static int jpeg_quality_ = 50;
-    inline static std::unique_ptr<httplib::Server> server_;
-    inline static std::thread server_thread_;
-    inline static std::mutex frame_mutex_;
-    inline static std::vector<uchar> current_frame_;
-    inline static bool server_running_ = false;
-    inline static bool initialized_ = false;
 };
 
-// Create by Qmian 2025/3/17
+// changed by xty::
+
 // #pragma once
 // #include <opencv2/opencv.hpp>
 // #include "httplib.h"

@@ -11,7 +11,7 @@ namespace controller
 {
     struct ControlResult;
 }
-
+//相机参数：
 namespace driver
 {
     struct SerialConfig
@@ -51,7 +51,7 @@ namespace driver
         LightSource lightSource = GX_AWB_LAMP_HOUSE_ADAPTIVE;
     };
 
-    struct RawSerialData
+    struct RawSerialData//通过串口发送的原始数据
     {
         int8_t start_flag;
         float pitch_now;
@@ -66,7 +66,7 @@ namespace driver
         uint16_t crc16;
     }__attribute__((packed));
 
-    struct ParsedSerialData
+    struct ParsedSerialData//通过串口接受的数据，数据包，通过UPD发送和接受，一次8位
     {
         int8_t start_flag;
         float pitch_now;

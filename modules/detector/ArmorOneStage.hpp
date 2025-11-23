@@ -16,6 +16,7 @@ namespace detector
         ~ArmorOneStage();
 
         BBoxes operator()(const cv::Mat &img);
+        //重载（）运算符。
         //cv::Mat getProposalPic();
         void setColorFlag(int flag_)
         {

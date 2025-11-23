@@ -6,7 +6,9 @@
 auto tracker::createTracker() -> std::unique_ptr<Tracker> {
     return std::make_unique<tracker::Tracker>();
 }
-
+/*std::unique_ptr<Tracker>tracker::createTracker(){
+    return std::make_unique<tracker::Tracker>();
+}*/
 namespace tracker {
 
 // This func will regard the last one as the final result.
@@ -53,6 +55,16 @@ void Tracker::merge(const Detections& detections, double threshold)
         }
     }
 }
+/*- 1.
+遍历输入的装甲板检测结果
+- 2.
+对于每个检测结果，检查是否与已存在的装甲板重叠（距离小于阈值）
+- 3.
+如果重叠且新检测的置信度更高，则替换旧的装甲板
+- 4.
+否则将新装甲板添加到列表中
+- 5.
+特殊处理灰色装甲板，将其存储在单独的列表中*/
 
 void Tracker::merge(const CarDetections& detections, double threshold) 
 {
@@ -70,7 +82,16 @@ void Tracker::merge(const CarDetections& detections, double threshold)
         car_rects.push_back(std::make_tuple(new_car_rect, -1, detection.tag_id));
     }
 }
+/*- 1.
+遍历输入的车辆检测结果
+- 2.
+对于每个检测结果，计算与已存在的车辆矩形框的交并比（IoU）
+- 3.
+如果IoU大于阈值，则替换旧的车辆矩形框
+- 4.
+否则将新车辆矩形框添加到列表中*/
 
+//不用了
 std::vector<cv::Rect2i> Tracker::calcROI(const std::vector<XYV>& projects, int width, int height, int camera_width, int camera_height) 
 {
     std::vector<cv::Rect2i> rois;
@@ -138,7 +159,7 @@ std::pair<double, double> calculateRotatedRect(const ArmorXYV& points_) {
     double aspectRatio = width / height;
     
     return {theta, aspectRatio};
-}
+}//矩形绘制更新
 
 std::map<int, Matcher> matchers;
 
@@ -156,6 +177,18 @@ TrackResults Tracker::getArmorTrackResult(const Time::TimeStamp& time, const Imu
             dead_frames++;
         }
     }
+/*
+1. 1.
+   将装甲板检测结果转换为跟踪结果格式
+2. 2.
+   为每个装甲板计算边界矩形框
+3. 3.
+   设置装甲板的位置信息（包括IMU数据）
+4. 4.
+   设置装甲板的车辆ID
+5. 5.
+   返回初始化的跟踪结
+   */
     // A very strict condition for gray armor
     // Just for avoid situation: red_4 sentry & blue_4 sentry
     // are all hit and turn to gray
@@ -383,7 +416,12 @@ inline cv::Point2f XYV2Point2f(const XYV& xyv)
 {
     return cv::Point2f(xyv.x, xyv.y);
 }
-
+//初始化检测结果。
+//将装甲板检测结果转换为跟踪结果格式
+//为每个装甲板计算边界矩形框
+//设置装甲板的位置信息（包括IMU数据）
+//设置装甲板的车辆ID
+//返回初始化的跟踪结果
 TrackResults Tracker::initArmorTrackResult(const ImuData& imu)
 {
     if(armors.empty()) return TrackResults();
@@ -409,6 +447,15 @@ TrackResults Tracker::initArmorTrackResult(const ImuData& imu)
 }
 
 std::map<int, MatcherWholeCar> matcher_whole_cars;
+
+/*- 1.
+按车辆ID对装甲板进行分组
+- 2.
+为每个车辆创建MatcherWholeCar对象（基于整车信息的匹配器）
+- 3.
+调用MatcherWholeCar的track方法进行跟踪匹配
+- 4.
+更新装甲板的ID信息*/
 
 void Tracker::getArmorTrackResultWithWholeCar(const Time::TimeStamp& time, const ImuData& imu, const CarTrackResults& car_results, TrackResults& armor_results)
 {
@@ -454,4 +501,29 @@ bool Tracker::isDetected()
 {
     return !armors.empty();
 }
-} // namespace tracker
+} 
+// namespace tracker
+/*
+### 4. 关键算法说明 4.1. 卡尔曼滤波匹配器（Matcher类）
+在TrackerMatcher.hpp中定义的Matcher类实现了基于卡尔曼滤波的目标跟踪算法：
+
+1. 1.
+   使用卡尔曼滤波预测目标位置
+2. 2.
+   通过匈牙利算法进行数据关联
+3. 3.
+   根据匹配结果更新轨迹状态
+4. 4.
+   处理未匹配轨迹的丢帧情况
+5. 5.
+   支持自动填充模式（NO_FILL/LAST_DETECT/FILTER_PREDICT） 4.2. 整车匹配器（MatcherWholeCar类）
+在TrackerMatcherWithWholeCar.hpp中定义的MatcherWholeCar类实现了基于整车信息的装甲板跟踪算法：
+
+1. 1.
+   结合装甲板位置和车辆矩形计算theta角度
+2. 2.
+   使用指数平滑算法更新角速度omega
+3. 3.
+   通过角度预测和多方案评估进行匹配
+4. 4.
+   处理空帧情况和时间间隔计算*/

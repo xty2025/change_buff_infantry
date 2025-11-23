@@ -3,11 +3,14 @@
 #include "ceres/ceres.h"
 #include "type.hpp"
 #include "Log/log.hpp"
-
 namespace predictor{
 
+
 const int N_X = 12;
+//预测状态12维度
+//state: x,vx,y,vy,theta,omega,r1,r2,z1,z2, ax,ay
 const int N_Y = 7;
+//观测7
 using VectorX = Eigen::Matrix<double, N_X, 1>;
 using VectorY = Eigen::Matrix<double, N_Y, 1>;
 using MatrixXX = Eigen::Matrix<double, N_X, N_X>;
@@ -43,6 +46,7 @@ struct stateTransFunc{
         xp[3] = x[3] + x[11] * dt; // ay
         xp[4] = x[4] + x[5] * dt;
         xp[5] = x[5];
+        
         xp[6] = x[6];
         xp[7] = x[7];
         xp[8] = x[8];
@@ -54,9 +58,10 @@ struct stateTransFunc{
     void setDt(double dt){
         this->dt = dt;
     }
-};
+};//状态矩阵
 //measure: ax,ay,az,tangent,angle_left,angle_right
 //new measure: armor_pitch, armor_yaw, dist, tangent, armor_left, armor_right
+//观测矩阵
 struct measureFunc{
     template<typename T>
     void operator()(const T s[N_X], T m[N_Y]){
@@ -64,7 +69,7 @@ struct measureFunc{
         T theta = s[4] + M_PI / 2 * id;
         T x = s[0];
         T y = s[2];
-        T z = (id % 2 == 0) ? s[8] : s[9];
+        T z = (id % 2 == 0) ? s[8] : s[9];//controller中的装甲板奇偶的转化逻辑
         T r = (id % 2 == 0) ? s[6] : s[7];
         T armor_x = x + r * ceres::cos(theta);
         T armor_y = y - r * ceres::sin(theta);
@@ -149,7 +154,7 @@ class MotionModel
 public:
     void initMotionModel();
     VectorX getPredictResult(const Time::TimeStamp& timestamp);
-    VectorY measureFromState(const VectorX& state, int armor_id)
+    VectorY measureFromState(const VectorX& state, int armor_id)//0，1，2，3
     {
         VectorY measure_vec;
         measure.setMode(false);
@@ -183,6 +188,7 @@ private:
         //double x_obs   = measure[0];
         //double y_obs   = measure[1];
         //double z_obs   = measure[2];
+        //转换成世界坐标。
         double dist = measure[2];
         double z_obs = dist * std::sin(measure[0]);  // armor_pitch
         double x_obs = dist * std::cos(measure[0]) * std::cos(measure[1]);  // armor_yaw
@@ -211,5 +217,5 @@ private:
     measureFunc measure;
     bool firstUpdate = true;
 };
-
+//根据vectorY得到vectorX->return vectorXmeasure vectorY。
 }

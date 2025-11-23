@@ -6,12 +6,24 @@
 auto predictor::createPredictor() -> std::unique_ptr<Predictor> {
     return std::make_unique<predictor::Predictor>();
 }
+/*
+std::unique_ptr<Predictor> auto predictor::createPredictor(){
+    return std::make_unique<predictor::Predictor>();
+}*/
+
 
 namespace predictor {
     std::function<Predictions(Time::TimeStamp)> Predictor::predictFunc()
     {
         return std::function<Predictions(Time::TimeStamp)>([&](Time::TimeStamp timestamp) { return predict(timestamp); });
     }
+    //回调函数
+    /*
+    std::function<Predictions(Time::TimeStamp)>Predictor::predictFunc(){
+        return std::function<Predictions(Time::TimeStamp)>([&](Time::TimeStamp timestamp){return predict(timestamp);});
+    }*/
+   
+
     Predictions Predictor::predict(Time::TimeStamp timestamp)
     {
         Predictions predictions;
@@ -23,6 +35,8 @@ namespace predictor {
                 predictions.push_back(model2world(car->getPredictResult(timestamp),std::function<VectorY(const VectorX&, int)>([&](const VectorX& state, int armorid) {
                     return car->measureFromState(state, armorid);
                 })));
+                //get并返回世界u坐标系。
+                //设置预测结果的ID和稳定状态
                 predictions.back().id = carid;
                 predictions.back().stable = car->armorStable();
             }

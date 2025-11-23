@@ -22,7 +22,9 @@ namespace detector
             armor_model_path = json_param["model_path"].String();
             car_model_path = json_param["car_model_path"].String();
             useOldModel = json_param["use_old_model"].Bool();
+            //声明智能指针
             armor_one_stage_inferer = std::make_unique<ArmorOneStage>(armor_model_path, useOldModel, allowGray);
+            //单个的ArmorOneStage的检测，重载后的（）运算符，返回的是一个BBoxes。
             yolo_detector = std::make_unique<YoloDetector>(car_model_path);
         }
         ~Detector() {}

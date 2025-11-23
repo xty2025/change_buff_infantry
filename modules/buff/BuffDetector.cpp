@@ -61,14 +61,24 @@ bool BuffDetector::findBuffArmor(Armor& armor) {
     cv::Mat image2show_detect = globalImage_3.clone();  //畫點或框調試用
     // 引入openvino推理
     // 编译模型
-    // core = ov::Core();
+    // core = ov::
+    // Core();
     // compiled_model = core.compile_model(OV_MODEL_PATH, "CPU", ov::hint::performance_mode(ov::hint::PerformanceMode::THROUGHPUT));
     // request = compiled_model.create_infer_request();
     // 图像预处理
     letterbox_img = letterbox_image(globalImage_3, cv::Size(416, 416)); 
     letterbox_img.convertTo(input_image, CV_32F, 1.0 / 255.0);
+    //创建推理。
     blob = cv::dnn::blobFromImage(letterbox_img, 1.0 / 255.0, cv::Size(MODEL_IMG_SIZE, MODEL_IMG_SIZE), cv::Scalar(), true);
     // cv::imshow("letterbox_img", letterbox_img);
+    /*cv::dnn::blobFromImage(
+    letterbox_img,          // 输入图像（经过letterbox预处理的图像）
+    1.0 / 255.0,            // 缩放因子（将像素值从[0,255]归一化到[0,1]）
+    cv::Size(MODEL_IMG_SIZE, MODEL_IMG_SIZE),  // 目标尺寸（模型要求的输入宽高）
+    cv::Scalar(),           // 均值减法（此处为空，表示不做均值去除）
+    true                    // 是否交换通道（OpenCV默认图像为BGR，神经网络常需RGB，true表示交换）
+)
+*/
 
     if (m_enemy_color == 0) //I am 0->red, hit red buff
     {
@@ -83,6 +93,7 @@ bool BuffDetector::findBuffArmor(Armor& armor) {
 
     // 设置输入张量
     auto input_port = compiled_model.input();
+    //推理：
     ov::Tensor input_tensor(input_port.get_element_type(), input_port.get_shape(), blob.ptr(0));
     request.set_input_tensor(input_tensor);
     // 推理

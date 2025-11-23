@@ -5,6 +5,24 @@
 #include <stdexcept>
 #include "Log/log.hpp"  // 使用 aimlog 中的 ERROR 宏
 
+
+/*实际的坐标转换由Solver类实现，它继承自BaseSolver：
+
+1. 1.
+   XYZ ↔ PYD转换 ：
+   
+   - XYZ2PYD：通过三角函数计算pitch、yaw、distance
+   - PYD2XYZ：通过三角函数反向计算x、y、z
+2. 2.
+   CXYD ↔ XYZ转换 ：
+   
+   - CXYD2XYZ：根据相机内参将像素坐标转换为空间坐标
+   - XYZ2CXYD：将空间坐标投影到像素坐标
+3. 3.
+   IMU融合 ：
+   
+   - camera2world：将相机坐标系下的点转换到世界坐标系（融合IMU数据）
+   - world2camera：将世界坐标系下的点转换到相机坐标系*/
 // 定义三种坐标类型
 struct XYZ {
     double x, y, z;
@@ -14,6 +32,7 @@ struct XYZ {
 struct PYD {
     double pitch, yaw, distance;
 };
+//相机坐标系：
 
 struct CXYD {
     double cx, cy, k;//when used as XYV , k > 2 means visible
@@ -37,11 +56,21 @@ struct XYV {
 
 namespace solver {
 
+
+    /*
+    ### 1. 非融合代理类
+- XYZProxy ：用于操作非融合的XYZ坐标
+- PYDProxy ：用于操作非融合的PYD坐标
+- CXYProxy ：用于操作非融合的CXY坐标
+### 2. 融合代理类
+- XYZIMUProxy ：用于操作融合IMU数据后的XYZ坐标
+- PYDIMUProxy ：用于操作融合IMU数据后的PYD坐标
+- CXYIMUProxy ：用于操作融合IMU数据后的CXY坐标*/
 // 抽象转换接口，由外部实现
 class BaseSolver {
 public:
     // pyd <-> xyz
-    virtual PYD XYZ2PYD(const XYZ &in) const = 0;
+    virtual PYD XYZ2PYD(const XYZ &in) const = 0;//留虚函数接口改写。
     virtual XYZ PYD2XYZ(const PYD &in) const = 0;
 
     // cxy <-> pyd
@@ -56,12 +85,39 @@ public:
 
 } // namespace solver
 
+
+//private: Location &parent_;提供接口接受数据
 // Location类：内部以 base_pyd_ 为非融合基本数据，所有非融合数据均由此计算得到。  
 // 融合数据通过 camera2world(base_pyd_, imu) 得到，即 fused_pyd_；进而 xyz_imu 与 cxy_imu 由 fused_pyd_ 转换得出。
 namespace location {
     class Location {
+    private :
+    
+        void updateFused() {
+            if (!solverRegistered_) {
+                ERROR("Solver not registered. updateFused failed.");
+                return;
+            }
+            fused_xyz_ = solverInstance_->camera2world(base_xyz_, imu);
+        }
+
+        // 内部数据存储
+        XYZ base_xyz_;  // 非融合的基础 xyz 数据
+        XYZ fused_xyz_; // 融合后的 xyz 数据
+
+        // 静态全局变量
+        inline static std::shared_ptr<const solver::BaseSolver> solverInstance_;
+        inline static bool solverRegistered_;
+        //xty:
+        //XYZProxy xyz_{*this};
+        //PYDProxy pyd_{*this};
+        //XYZProxy (Location &parent) : parent_(parent) {} //location对象
+
     public:
-        // 注册全局Solver实例
+        // 注册全局Solver实例aa
+        //控制器里的Solver::registerSolver
+        //registerSolver 是一个静态函数，用于注册全局的 solver 实例。
+        // solver 是一个实现了 BaseSolver 接口的类，负责各种坐标系之间的转换
         static void registerSolver(const std::shared_ptr<const solver::BaseSolver>& s) {
             solverInstance_ = s;
             solverRegistered_ = (s != nullptr);
@@ -71,14 +127,17 @@ namespace location {
         class XYZProxy {
         public:
             XYZProxy(Location &parent) : parent_(parent) {}
+            //初始化并构造传递给_parent
             XYZProxy& operator=(const XYZ &value) {
+                //把XYZ坐标系的类传递给代理类，并且重载“=”运算符
                 if (!solverRegistered_) {
                     ERROR("Solver not registered. XYZ assignment ignored.");
-                    return *this;
+                    return *this;//返回当前对象，不进行复制操作
                 }
                 parent_.base_xyz_ = value;
                 parent_.updateFused();
                 return *this;
+                //更新之后再返回当前值。
             }
             operator XYZ() const { return parent_.base_xyz_; }
         private:
@@ -269,7 +328,7 @@ namespace location {
         }
 
         PYD imu;  // imu 数据
-
+/*
     private:
         // 更新融合数据
         void updateFused() {
@@ -287,5 +346,6 @@ namespace location {
         // 静态全局变量
         inline static std::shared_ptr<const solver::BaseSolver> solverInstance_;
         inline static bool solverRegistered_;
+*/
     };
 }

@@ -70,6 +70,8 @@ private:
     std::atomic<bool> finished_;
     
     // 线程控制
+    //原子操作是不可分割的操作，在执行过程中不会被其他线程中断。当多个线程同时访问和修改 std::atomic<> 类型的变量时，
+    //不需要额外的锁机制（如 std::mutex ）来保护。避免线程卡死或死锁
     std::atomic<bool> serial_running_;   // 串口线程运行标志
     std::atomic<bool> camera_running_;   // 相机线程运行标志
     std::mutex camera_data_mutex_;
@@ -84,8 +86,11 @@ private:
     std::queue<ReplaySerialData> serial_data_queue_;
     
     // 回调函数
-    std::function<void(const ParsedSerialData&)> read_callback_;
     
+    std::function<void(const ParsedSerialData&)> read_callback_;
+    //change
+    //std::function<void*(const ParsedSerialData&)> read_callback_;
+
     // 状态标志
     std::atomic<bool> existNewCameraData_;
     

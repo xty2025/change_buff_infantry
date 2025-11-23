@@ -1,5 +1,5 @@
 #pragma once
-
+#include<iostream>
 #include <opencv2/opencv.hpp>
 #include <string>
 #include <queue>
@@ -13,16 +13,61 @@
 #include <TimeStamp/TimeStamp.hpp>
 #include <Log/log.hpp>
 #include "driver/type.hpp"
+//调用：
+/*
+//AutoAim.cpp
+Recoder::instance().strat();
+Recoder::instance().addSerialData(parsedData);
+Recoder::instance().addFrame(frame);
+Recoder::instance().stop();
+*/
+/*addSerialData() 模板方法用于处理串口数据：
+- 直接将数据写入文件，避免队列堆积
+- 每10条数据执行一次文件刷新（flush）
+- 使用特化方法处理特定类型的数据（如ParsedSerialData）
+对于 ParsedSerialData 类型，序列化方法会保存以下数据：
+- pitch_now, yaw_now, roll_now（当前姿态）
+- actual_bullet_speed（实际子弹速度）
+- aim_request, mode_want, number_want, enemy_color（目标请求、模式、编号、敌方颜色*/
+/*
+后台处理线程
+Recorder使用独立线程处理视频帧：
+add_Frame()添加视频帧。
+通过条件变量等待新帧到达
+定期检查是否需要退出
+处理视频帧并写入视频文件
+同时在串口数据文件中记录每帧的时间戳
+文件管理
+Recorder会创建两个文件：
+
+1.
+### 后台处理线程
+Recorder使用独立线程处理视频帧：
+
+- 通过条件变量等待新帧到达
+- 定期检查是否需要退出
+- 处理视频帧并写入视频文件
+- 同时在串口数据文件中记录每帧的时间戳
+### 文件管理
+视频文件（.avi格式）：保存录制的视频帧
+2.
+串口数据文件（.txt格式）：保存串口数据和视频帧时间戳，格式如下：
+# Recording started at [timestamp]（开始标记）
+S [timestamp] [data]（串口数据）
+F [timestamp]（视频帧时间戳）
+# Recording stopped（结束标记
+*/
 
 namespace recording {
 using driver::ParsedSerialData;
 using driver::TimeImageData;
+//串口数据和图像数据
 class Recorder {
 public:
     static Recorder& instance() {
         static Recorder instance;
         return instance;
-    }
+    }//单例模式只能有一个Recoder的实例。
     
     void start() {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -30,11 +75,22 @@ public:
             WARN("Recorder already running");
             return;
         }
-        
+        /*
+    #include<mutex>
+    void start(){
+        std::lock_guard<std::mutex>lock(mutex_);
+        if(isRunning_){
+            return ;
+        }
+    }*/
+
         // 创建时间戳文件名
         auto now = std::chrono::system_clock::now();
         auto time = std::chrono::system_clock::to_time_t(now);
+        //转换为秒格式的时间戳。
         std::tm tm = *std::localtime(&time);
+        //转为年月日形式，返回内部缓冲区的指针。
+        //准备足够的缓冲区
         char buffer[32];
         std::strftime(buffer, sizeof(buffer), "%Y%m%d%H%M%S", &tm);
         currentFileName_ = std::string(buffer);

@@ -1,5 +1,11 @@
-# AutoAim Utils Include
-
+# AutoAim Utils Include：
+utils库分离，一般来说：
+utils库里的内容通常包含以下几类：
+数据处理和转换: 例如，处理字符串、日期、数字格式化、数据类型转换的函数。
+文件和I/O操作: 比如，读取和写入文件、路径处理、压缩和解压文件的函数
+网络和API辅助: 比如，发送HTTP请求、处理JSON或XML数据、URL编码/解码的函数。
+数学和算法工具: 比如，一些通用的数学计算、排序算法、加密/解密函数。
+通用的辅助类: 比如，日志记录器、配置解析器、异常处理类。
 ** AI GENERATED FILES **
 
 此目录包含多个实用工具模块，每个模块提供特定功能以支持 AutoAim 项目。以下是各模块的简要说明和使用注意事项。
@@ -72,4 +78,5 @@
 
 ---
 
-
+nlohmann::json库应用：
+在你的项目中，nlohmann::json库被广泛应用于各个模块的配置管理中，例如Solver模块加载相机参数 `solver.hpp` 、Detector模块加载模型路径 `detector.hpp` 、Controller模块读取控制参数 `controller.hpp` 等。

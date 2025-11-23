@@ -10,7 +10,12 @@ using namespace aimlog;
 auto replayer::createReplayer(const std::string& videoPath, const std::string& serialPath, bool onlyVideo, float speed) -> std::unique_ptr<Replayer> {
     return std::make_unique<replayer::Replayer>(videoPath, serialPath, onlyVideo, speed);
 }
+/*
+std::unique_ptr<Replayer> replayer::createReplayer(const std::string &videopath,const std::string &serialpath,bool onlyvideo,float speed){
+    return std::make_unique_ptr<replayer::Replayer>(videopath,serialpath,onlyvideo,speed);
+}*/
 
+//构造
 Replayer::Replayer(const std::string& videoPath, const std::string& serialPath, bool onlyVideo, float speed)
     : videoPath_(videoPath), serialPath_(serialPath), 
       serial_running_(false), camera_running_(false),

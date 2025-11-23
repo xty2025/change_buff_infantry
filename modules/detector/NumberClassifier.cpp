@@ -61,7 +61,7 @@ namespace detector
         }
         return is_model_set;
     }
-
+    //透视变换提取数字区域：
     bool NumberClassifier::affineNumber(const cv::Mat &frame, const std::vector<cv::Point2f> &corners)
     {
         if (mode_ == svm)
@@ -130,6 +130,7 @@ namespace detector
         else if (mode_ == net)
         {
             //TODO
+            //神经网络自带。
             return true;
         }
         return false;
@@ -302,6 +303,15 @@ namespace detector
         return img;
     }
 
+
+    /*std::pair<int, double> NumberClassifier::predict(const cv::Mat &frame, const std::vector<cv::Point2f> &corners)
+{
+    // 提取装甲板数字区域
+    // 应用自适应Gamma校正改善图像质量
+    // 提取HOG特征描述子
+    // 使用SVM模型进行数字分类预测
+    // 返回预测的数字类别和置信度
+}*/
     std::pair<int, double> NumberClassifier::predict(const cv::Mat &frame, const std::vector<cv::Point2f> &corners)
     {
         if (!affineNumber(frame, corners) || number_roi.empty())

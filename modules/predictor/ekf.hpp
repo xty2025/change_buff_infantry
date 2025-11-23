@@ -82,26 +82,30 @@ public:
     explicit BMEKF(const VectorX &X0 = VectorX::Zero())
             : Xe(X0), P(MatrixXX::Identity()), Q(MatrixXX::Identity())
             , R1(MatrixYY1::Identity()), R2(MatrixYY2::Identity()) {}
-
+//都用单位矩阵初始化
     template<class Func>
     VectorX predict(Func &&func) {
         ceres::Jet<double, N_X> Xe_auto_jet[N_X];
+        //当前估计状态
+        //自动微分jet
         for (int i = 0; i < N_X; i++) {
             Xe_auto_jet[i].a = Xe[i];
-            Xe_auto_jet[i].v[i] = 1;
+            Xe_auto_jet[i].v[i] = 1;//初始化为I，后面根据Func填充
         }
+        //预测状态
         ceres::Jet<double, N_X> Xp_auto_jet[N_X];
         func(Xe_auto_jet, Xp_auto_jet);
         for (int i = 0; i < N_X; i++) {
             Xp[i] = Xp_auto_jet[i].a;
-            F.block(i, 0, 1, N_X) = Xp_auto_jet[i].v.transpose();
+            F.block(i, 0, 1, N_X) = Xp_auto_jet[i].v.transpose();//雅可比
         }
-        P = F * P * F.transpose() + Q;
+        P = F * P * F.transpose() + Q;//预测状态协方差
         return Xp;
     }
 
     template<class Func>
     VectorX update(Func &&func, const VectorY1 &Y1) {
+        //
         ceres::Jet<double, N_X> Xp_auto_jet[N_X];
         for (int i = 0; i < N_X; i++) {
             Xp_auto_jet[i].a = Xp[i];
@@ -113,12 +117,16 @@ public:
             Yp1[i] = Yp_auto_jet[i].a;
             H1.block(i, 0, 1, N_X) = Yp_auto_jet[i].v.transpose();
         }
+        //同上的自动求导机制
         K1 = P * H1.transpose() * (H1 * P * H1.transpose() + R1).inverse();
         Xe = Xp + K1 * (Y1 - Yp1);
         P = (MatrixXX::Identity() - K1 * H1) * P;
         return Xe;
+        //Xe=Xp+K1*(Y1-Yp1)核心计算进行甲醛，之后进行P的更新。
     }
 
+
+    //对应逻辑，对第二个的变量进行更新。
     template<class Func>
     VectorX update(Func &&func, const VectorY2 &Y2) {
         ceres::Jet<double, N_X> Xp_auto_jet[N_X];

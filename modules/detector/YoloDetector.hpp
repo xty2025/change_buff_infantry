@@ -12,7 +12,14 @@ struct YoloDetection {
     float confidence;                   // 置信度
     float area;                         // 区域面积
 };
-
+/*
+struct YoloDetection{
+    cv::Point2f center;
+    cv::Rect rect;
+    int class_id;
+    float confidence;
+    float area;
+}*/
 class YoloDetector {
 public:
     enum class Precision {
@@ -32,6 +39,7 @@ public:
     
     
     // 设置置信度和 NMS 阈值
+    //NMS去除重复的框。类比mIoU阈值。
     void setConfThreshold(float threshold);
     void setNMSThreshold(float threshold);
 

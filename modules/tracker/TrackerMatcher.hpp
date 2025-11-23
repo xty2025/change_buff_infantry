@@ -8,7 +8,6 @@
 #include <set>
 #include <TimeStamp/TimeStamp.hpp>
 #include <Log/log.hpp>
-
 using namespace aimlog;
 using namespace cv;
 using namespace std;
@@ -51,7 +50,7 @@ struct Track {
         kf.statePost = (Mat_<float>(4,1) << pt.x, pt.y, vec_init.x, vec_init.y);
     }
 };
-
+//基于卡尔曼滤波器和匈牙利算法进行匹配的逻辑。
 class Matcher {
 public:
     Matcher() : sameLabelError(70.0f), diffLabelError(70.0f), alpha(0.2f), autoFillMode(NO_FILL) {}
@@ -60,8 +59,9 @@ public:
     // 追踪函数，输入当前帧的原始测量坐标，
     // 对于已匹配的点直接返回传入的原始坐标，
     // 对于新出现的点，根据左右极值关系分配编号：
-    //   右侧的新点编号为 (rightmost + 1) mod 4，
-    //   左侧的新点编号为 (leftmost - 1 + 4) mod 4。
+    // 右侧的新点编号为 (rightmost + 1) mod 4，
+    // 左侧的新点编号为 (leftmost - 1 + 4) mod 4。
+    // 左右加入检测边界点
     // 修改 Observer::track()，增加 dt 参数，并在预测时更新转移矩阵
     template<typename T>
     map<int,const T*> track(const vector<pair<Point, const T*>>& currentPoints, Time::TimeStamp time, double timeRatio) {
@@ -69,13 +69,15 @@ public:
         if(newTrack)
             newTrack = false;
         else
-            dt = (time - last_time).count() / timeRatio;
+            dt = (time - last_time).count() / timeRatio;//设置时间间隔dt
         last_time = time;
         map<int, Point> output;
         std::vector<int> return_result(currentPoints.size(), -1);
         vector<bool> used(currentPoints.size(), false);
 
         // 计算自适应距离门限
+        //替换后会不会更好？
+        //float adaptiveThreshold = sameLabelError*0.7+diffLabelError*0.3;
         float adaptiveThreshold = sameLabelError * 0.6f + diffLabelError * 0.4f;
         INFO("Adaptive Threshold: {}",adaptiveThreshold);
         INFO("Same Label Error: {}",sameLabelError);
@@ -99,6 +101,7 @@ public:
             float sigma = 1e-2f;
             float dt2 = static_cast<float>(dt * dt);
             float dt3 = static_cast<float>(dt2 * dt);
+            //显示的类型转换
             trk.kf.processNoiseCov = (Mat_<float>(4,4) <<
                 sigma * dt3 / 3.0f, 0,                sigma * dt2 / 2.0f, 0,
                 0,                sigma * dt3 / 3.0f, 0,                sigma * dt2 / 2.0f,
@@ -240,6 +243,7 @@ public:
                     if (candidateError > 0)
                         diffLabelError = alpha * candidateError + (1 - alpha) * diffLabelError;
                 }
+                //cal=α*diffError+(1-α)*candidateError
                 usedIds.insert(newId);
                 {
                     Point2f initVel(0, 0);

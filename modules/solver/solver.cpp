@@ -85,6 +85,7 @@ double calcDistance(const std::vector<cv::Point2f>& points, double yaw, double p
     return std::sqrt(a1 * a1 + D * D - 2 * a1 * D * std::cos(pitch));
 }
 
+//计算四个点的中心坐标
 cv::Point2f exactCenter(const std::vector<cv::Point2f>& points) {
     cv::Point2f center(0, 0);
     if(points.size() != 4) {
@@ -103,7 +104,11 @@ cv::Point2f exactCenter(const std::vector<cv::Point2f>& points) {
 inline double normalizeAngle(double angle) {
     return std::remainder(angle, 2 * M_PI);
 }
-
+//重载cameratoworld:- 使用OpenCV的solvePnPGeneric函数计算多个可能的解：
+//solvePnP 是 OpenCV 中用于 求解外部参数（外参） 的算法。
+// trackResult: 装甲板的四个角点坐标
+// 它是 Perspective-n-Point（PnP）问题的解法之一，通常用于从已知的 3D 点和 2D 图像点计算相机的位置和方向（即外参：旋转矩阵和位移向量）。
+//- 通过比较与前一帧的角度差选择最优解,在调用正常的camera2world函数转换成世界坐标
 //return {pyd, armor_yaw}
 std::pair<XYZ,double> Solver::camera2world(const ArmorXYV& trackResult, const ImuData& imuData_deg, bool isLarge) {
     cv::Mat cameraMatrix, distCoeffs;
@@ -135,7 +140,7 @@ std::pair<XYZ,double> Solver::camera2world(const ArmorXYV& trackResult, const Im
     // 处理第一帧的情况
     if (solutions > 0 && std::abs(prev_armor_yaw) < 1e-6) {
         cv::Mat rotMat;
-        cv::Rodrigues(rvecs[0], rotMat);
+        cv::Rodrigues(rvecs[0], rotMat);//旋转向量存储成分旋转矩阵。
         prev_armor_yaw = atan2(rotMat.at<double>(2, 0), rotMat.at<double>(0, 0));
         prev_armor_yaw = normalizeAngle(prev_armor_yaw);
     }
@@ -149,6 +154,7 @@ std::pair<XYZ,double> Solver::camera2world(const ArmorXYV& trackResult, const Im
 
         // 计算与上一帧的角度差
         double diff = std::abs(normalizeAngle(current_yaw - prev_armor_yaw));
+        //计算距离，欧几里得范数
         double dist = tvecs[i].at<double>(0) * tvecs[i].at<double>(0) +
                       tvecs[i].at<double>(1) * tvecs[i].at<double>(1) +
                       tvecs[i].at<double>(2) * tvecs[i].at<double>(2);
@@ -170,7 +176,7 @@ std::pair<XYZ,double> Solver::camera2world(const ArmorXYV& trackResult, const Im
     INFO("Selected armor_yaw: {}", armor_yaw);
 
 
-
+    //把opencv的坐标系转换成我们的世界坐标系。
     XYZ camera(tvec.at<double>(2), -tvec.at<double>(0), -tvec.at<double>(1));
     XYZ result = camera2world(camera, imuData_deg);
     //pyd.distance = 1;
@@ -178,8 +184,12 @@ std::pair<XYZ,double> Solver::camera2world(const ArmorXYV& trackResult, const Im
     //pyd.distance = calcDistance(imagePoints, pyd.yaw, pyd.pitch);
     INFO("x:{},y:{},z:{},dist:{}",result.x,result.y,result.z, sqrt(result.x*result.x + result.y*result.y + result.z*result.z));
     return std::make_pair(result, armor_yaw + imu_yaw);
+    //返回世界坐标和装甲板总角度（装甲板角度+IMU yaw角度）
 }
 
+//重载cameratoworldWithWholeCar:
+//功能：- 基于整个车辆的包围矩形来优化装甲板的世界坐标计算
+//通过包围矩形估计装甲板的角度，然后选择最接近估计角度的解
 std::pair<XYZ,double> Solver::camera2worldWithWholeCar(const ArmorXYV& trackResult, const ImuData& imuData_deg, const cv::Rect& bounding_rect, bool isLarge)
 {
     cv::Mat cameraMatrix, distCoeffs;
@@ -213,14 +223,24 @@ std::pair<XYZ,double> Solver::camera2worldWithWholeCar(const ArmorXYV& trackResu
     double rect_center_x = (bounding_rect.x + bounding_rect.width / 2);
     double armor_center_x = (imagePoints[0].x + imagePoints[1].x + imagePoints[2].x + imagePoints[3].x) / 4;
     double half_width = bounding_rect.width / 2;
+    // 根据装甲板相对于矩形中心的位置估算角度
+    //左右的极限角度。
     if((armor_center_x - rect_center_x) / half_width > 1)
         estimate_armor_yaw = M_PI / 2.0;
     else if ((armor_center_x - rect_center_x) / half_width < -1)
         estimate_armor_yaw = -M_PI / 2.0;
     else
         estimate_armor_yaw = std::asin((armor_center_x - rect_center_x) / half_width);
+    // 加一个处理第一帧的情况？
+    /*
+    if (solutions > 0 && std::abs(prev_armor_yaw) < 1e-6) {
+        cv::Mat rotMat;
+        cv::Rodrigues(rvecs[0], rotMat);//旋转向量存储成分旋转矩阵。
+        prev_armor_yaw = atan2(rotMat.at<double>(2, 0), rotMat.at<double>(0, 0));
+        prev_armor_yaw = normalizeAngle(prev_armor_yaw);
+    }*/
 
-    // 遍历所有解，选择与上一帧最接近的
+    // 遍历所有解，选择与上一帧最接近的（估计角度）。
     for (int i = 0; i < solutions; i++) {
         cv::Mat rotMat;
         cv::Rodrigues(rvecs[i], rotMat);
@@ -233,7 +253,7 @@ std::pair<XYZ,double> Solver::camera2worldWithWholeCar(const ArmorXYV& trackResu
                       tvecs[i].at<double>(1) * tvecs[i].at<double>(1) +
                       tvecs[i].at<double>(2) * tvecs[i].at<double>(2);
         dist = std::sqrt(dist);
-
+        
         // 保存差异最小的解
         if (diff < min_diff) {
             min_diff = diff;
@@ -257,14 +277,15 @@ std::pair<XYZ,double> Solver::camera2worldWithWholeCar(const ArmorXYV& trackResu
 
     XYZ camera(tvec.at<double>(2), -tvec.at<double>(0), -tvec.at<double>(1));
     INFO("before transform: x:{},y:{},z:{}",camera.x,camera.y,camera.z);
+    // 调用另一个重载的camera2world函数将相机坐标转换为世界坐标
     XYZ result = camera2world(camera, imuData_deg);
     //pyd.distance = 1;
-
+    
     //pyd.distance = calcDistance(imagePoints, pyd.yaw, pyd.pitch);
     INFO("x:{},y:{},z:{},dist:{}",result.x,result.y,result.z, sqrt(result.x*result.x + result.y*result.y + result.z*result.z));
     return std::make_pair(result, armor_yaw + imu_yaw);
 }
-
+//setfunction.
 void Solver::setCameraIntrinsicMatrix(const Eigen::Matrix3d& cameraIntrinsicMatrix) {
     this->cameraIntrinsicMatrix = cameraIntrinsicMatrix;
 }

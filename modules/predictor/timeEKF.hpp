@@ -22,7 +22,7 @@ class TimeEKF
         stateTrans.setDt((timestamp - lastTime).toSeconds());
         stateTrans(X, Xp);
         return Xp;
-    }
+    }//基于时间戳
     VectorX predict(double dt)
     {
         VectorX X = ekf.Xe;
@@ -39,7 +39,7 @@ class TimeEKF
         //     std::cout << Xp[i] << " ";
         // }
         return Xp;
-    }
+    }//基于预测函数
     void setTotalId(int id1, int id2=-1)
     {
         measure.setVisibleId(id1, id2);
