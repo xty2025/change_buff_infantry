@@ -5,7 +5,6 @@
 #include <functional>
 #include <opencv2/opencv.hpp>
 #include "TimeStamp/TimeStamp.hpp"
-
 //前向声明
 namespace controller
 {
