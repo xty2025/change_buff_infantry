@@ -51,11 +51,23 @@ namespace predictor {
         for(const auto& trackResult : trackResults.first)
         {
             VectorY measure;
+            measure.setZero();
             XYZ armor_xyz = trackResult.location.xyz_imu;
             measure[0] = armor_xyz.x;
             measure[1] = armor_xyz.y;
             measure[2] = armor_xyz.z;
             measure[3] = trackResult.yaw;
+
+            //xty:
+
+
+            // 旧 7 维观测下没有上下边界信息；
+            // 先用当前装甲板中心 pitch 作为默认值，后续若有整车框再覆盖为 top/bottom/center。
+            // measure[4..6] 仍由后面的左右边界推导。
+            const double center_pitch = static_cast<PYD>(trackResult.location.pyd_imu).pitch;
+            measure[7] = center_pitch;
+            measure[8] = center_pitch;
+            measure[9] = center_pitch;
             measures[trackResult.car_id].push_back(std::make_tuple(measure, trackResult.armor_id, trackResult.location, false));
             //INFO("track: car_id: {}, armor_id: {}, x: {}, y: {}, distance: {}", trackResult.car_id, trackResult.armor_id, measure[0], measure[1], measure[2]);
             detect_count[trackResult.car_id] = 0;
@@ -68,6 +80,14 @@ namespace predictor {
             CXYD temp;
             double leftx = trackResult.bounding_rect.x;
             double rightx = trackResult.bounding_rect.x + trackResult.bounding_rect.width;
+            // double topy = trackResult.bounding_rect.y;
+            // double bottomy = trackResult.bounding_rect.y + trackResult.bounding_rect.height;
+
+            //xty:
+
+
+            double topy = trackResult.bounding_rect.y;
+            double bottomy = trackResult.bounding_rect.y + trackResult.bounding_rect.height;
             if(measures.find(trackResult.car_id) == measures.end())
                 continue;//只检测到框没有装甲板，则舍弃
             for(auto& measure_tuple: measures[trackResult.car_id])
@@ -83,8 +103,27 @@ namespace predictor {
                 std::get<0>(measure_tuple)[5] = static_cast<PYD>(edge.pyd_imu).yaw;
                 double yaw_diff = std::remainder(std::get<0>(measure_tuple)[5] - std::get<0>(measure_tuple)[4], 2 * M_PI)/2.0;
                 std::get<0>(measure_tuple)[6] = yaw_diff + std::get<0>(measure_tuple)[4];
+
+                //xty:
+
+
+                // 仿照 yaw 左右边界逻辑，构建 pitch 上下边界观测。
+                temp = std::get<2>(measure_tuple).cxy;
+                temp.cy = topy;
+                edge.cxy = temp;
+                std::get<0>(measure_tuple)[7] = static_cast<PYD>(edge.pyd_imu).pitch;
+
+                temp.cy = bottomy;
+                edge.cxy = temp;
+                std::get<0>(measure_tuple)[8] = static_cast<PYD>(edge.pyd_imu).pitch;
+
+                double pitch_diff = std::remainder(std::get<0>(measure_tuple)[8] - std::get<0>(measure_tuple)[7], 2 * M_PI) / 2.0;
+                std::get<0>(measure_tuple)[9] = pitch_diff + std::get<0>(measure_tuple)[7];
+
                 INFO("left-right: {}, {}", std::get<0>(measure_tuple)[5], std::get<0>(measure_tuple)[4]);
                 INFO("left-right = {}", std::get<0>(measure_tuple)[5] - std::get<0>(measure_tuple)[4]);
+                INFO("top-bottom pitch: {}, {}", std::get<0>(measure_tuple)[7], std::get<0>(measure_tuple)[8]);
+                INFO("top-bottom pitch = {}", std::get<0>(measure_tuple)[8] - std::get<0>(measure_tuple)[7]);
                 std::get<3>(measure_tuple) = true;
             }
         }
@@ -180,7 +219,16 @@ namespace predictor {
         }
         return prediction;
     }
-//measure: ax,ay,az,tangent,angle_left,angle_right
+// measure: ax,ay,az,tangent,angle_left,angle_right
+// 旧版 7 维映射保留如下：
+// measure_model[4] = -0.5 * M_PI - measure[4];
+// measure_model[5] = -0.5 * M_PI - measure[5];
+// measure_model[6] = -0.5 * M_PI - measure[6];
+
+//xty:
+
+
+// measure: x,y,z,yaw,yaw_left,yaw_right,yaw_center,pitch_top,pitch_bottom,pitch_center
     VectorY Predictor::world2model(const VectorY& measure)
     {
         INFO("ENTER world2model");
@@ -199,6 +247,9 @@ namespace predictor {
         measure_model[4] = -0.5 * M_PI - measure[4];
         measure_model[5] = -0.5 * M_PI - measure[5];
         measure_model[6] = -0.5 * M_PI - measure[6];
+        measure_model[7] = measure[7];
+        measure_model[8] = measure[8];
+        measure_model[9] = measure[9];
         INFO("ENTER parameter: {}, {}, {}, {}, {}, {}", measure_model[0], measure_model[1], measure_model[2], measure_model[3], measure_model[4], measure_model[5]);
         return measure_model;
     }

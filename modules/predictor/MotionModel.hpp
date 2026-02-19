@@ -9,8 +9,14 @@ namespace predictor{
 const int N_X = 12;
 //预测状态12维度
 //state: x,vx,y,vy,theta,omega,r1,r2,z1,z2, ax,ay
-const int N_Y = 7;
-//观测7
+// const int N_Y = 7;
+// 观测7: armor_pitch, armor_yaw, dist, tangent, yaw_left, yaw_right, yaw_center
+
+//xty:
+
+
+const int N_Y = 10;
+// 观测10: armor_pitch, armor_yaw, dist, tangent, yaw_left, yaw_right, yaw_center, pitch_top, pitch_bottom, pitch_center
 using VectorX = Eigen::Matrix<double, N_X, 1>;
 using VectorY = Eigen::Matrix<double, N_Y, 1>;
 using MatrixXX = Eigen::Matrix<double, N_X, N_X>;
@@ -61,6 +67,7 @@ struct stateTransFunc{
 };//状态矩阵
 //measure: ax,ay,az,tangent,angle_left,angle_right
 //new measure: armor_pitch, armor_yaw, dist, tangent, armor_left, armor_right
+//扩展后: + yaw_center + pitch_top + pitch_bottom + pitch_center
 //观测矩阵
 struct measureFunc{
     template<typename T>
@@ -114,6 +121,18 @@ struct measureFunc{
             //std::cout << "enter two id mode"<<std::endl;
             //std::cout<< "calc id:" << this->total_id1 << " " << (this->total_id2 + 1)%4 << std::endl;
         }
+
+        //xty:
+
+
+        // pitch 轴上下边界观测（轮腿上下小陀螺）
+        // 用车体中心水平距离估计上/下边界对应的俯仰角。
+        T center_dist = ceres::sqrt(x * x + y * y);
+        T z_top = max(s[8], s[9]);
+        T z_bottom = min(s[8], s[9]);
+        m[7] = ceres::atan2(z_top, center_dist);
+        m[8] = ceres::atan2(z_bottom, center_dist);
+        m[9] = ceres::atan2((s[8] + s[9]) * T(0.5), center_dist);
     }
     int id;
     int total_id1 = -1;
@@ -175,6 +194,26 @@ public:
         id2 = -1;
     }
 private:
+
+    //xty:
+
+
+    // 边界观测误差拟合（yaw/pitch）并自适应更新 R。
+    // 参考 yaw 轴做法，同步扩展到 pitch 轴上下边界。
+    void fitBoundaryErrorAndUpdateR(const VectorY& residual);
+
+    // 保存初始测量噪声矩阵，做自适应缩放时作为基线。
+    MatrixYY base_R_ = MatrixYY::Zero();
+
+    // yaw/pitch 边界残差方差的指数滑动估计（EMA）。
+    double yaw_boundary_var_ema_ = 0.02;
+    double pitch_boundary_var_ema_ = 0.02;
+
+    // EMA 平滑参数与缩放上下限。
+    double boundary_fit_alpha_ = 0.12;
+    double boundary_scale_min_ = 0.5;
+    double boundary_scale_max_ = 6.0;
+
     bool whole_car_stable = true;
     bool armor_stable = false;
     int id1 = -1;

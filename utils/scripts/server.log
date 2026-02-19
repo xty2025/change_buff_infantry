@@ -1378,3 +1378,12 @@
 2025-11-23 16:48:50,441 [ERROR] 视频流错误: HTTPConnectionPool(host='127.0.0.1', port=8081): Max retries exceeded with url: /stream (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7d735f359090>: Failed to establish a new connection: [Errno 111] Connection refused'))
 2025-11-23 16:48:50,441 [INFO] 127.0.0.1 - - [23/Nov/2025 16:48:50] "GET /video_feed HTTP/1.1" 200 -
 2025-11-23 16:48:50,557 [INFO] 127.0.0.1 - - [23/Nov/2025 16:48:50] "GET /api/config HTTP/1.1" 200 -
+2026-02-19 18:10:57,220 [INFO] find ip:None
+2026-02-19 18:10:57,238 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8080
+ * Running on http://192.168.40.128:8080
+2026-02-19 18:10:57,238 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-19 18:11:02,408 [INFO] find ip:None
+2026-02-19 18:11:43,190 [INFO] find ip:None
+2026-02-19 18:12:34,093 [INFO] find ip:None

@@ -41,7 +41,7 @@ def get_local_ip():
         #hostname,alialist,ipaddrlist
         ips = socket.gethostbyname_ex(hostname)[2]
         for ip in ips:
-            if ip.startswith("192.168.137."):
+            if ip.startswith("192.168."):
                 return ip
     except Exception as e:
         print(f"获取IP（方式1）失败: {e}")

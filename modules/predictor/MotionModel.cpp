@@ -1,4 +1,5 @@
 #include "MotionModel.hpp"
+#include <algorithm>
 //预测状态12维度
 //观测7维度
 //计算卡尔曼滤波器的流程
@@ -143,18 +144,90 @@ void MotionModel::initMotionModel()
     Q_val(7,7) = q_r2_drift_base_ * dt; 
     Q_val(8,8) = q_z1_drift_base_ * dt;
     Q_val(9,9) = q_z2_drift_base_ * dt;
-            // 测量变量顺序: ax, ay, az, tangent, angle_left, angle_right
-    MatrixYY R = MatrixYY::Zero();
-    R << 0.01,  0,     0,     0,     0,     0, 0,
-         0.,    0.01,  0,     0,     0,     0, 0,
-         0,     0,     0.1,   0,     0,     0, 0,
-         0,     0,     0,     0.04,   0,     0, 0,
-         0,     0,     0,     0,     0.04,  0.015,0,
-         0,     0,     0,     0,     0.015, 0.04,0,
-         0,     0,     0,     0,     0,     0,   0.01;
+                // 测量变量顺序: ax, ay, az, tangent, angle_left, angle_right
+            // MatrixYY R = MatrixYY::Zero();
+            // R << 0.01,  0,     0,     0,     0,     0, 0,
+            //      0.,    0.01,  0,     0,     0,     0, 0,
+            //      0,     0,     0.1,   0,     0,     0, 0,
+            //      0,     0,     0,     0.04,   0,     0, 0,
+            //      0,     0,     0,     0,     0.04,  0.015,0,
+            //      0,     0,     0,     0,     0.015, 0.04,0,
+            //      0,     0,     0,     0,     0,     0,   0.01;
+
+            //xty:
+
+
+            // 扩展为 10 维观测：
+            // armor_pitch, armor_yaw, dist, tangent,
+            // yaw_left, yaw_right, yaw_center,
+            // pitch_top, pitch_bottom, pitch_center
+            MatrixYY R = MatrixYY::Zero();
+            R << 0.01,  0,     0,     0,      0,      0,      0,      0,      0,      0,
+             0,     0.01,  0,     0,      0,      0,      0,      0,      0,      0,
+             0,     0,     0.1,   0,      0,      0,      0,      0,      0,      0,
+             0,     0,     0,     0.04,   0,      0,      0,      0,      0,      0,
+             0,     0,     0,     0,      0.04,   0.015,  0.01,   0,      0,      0,
+             0,     0,     0,     0,      0.015,  0.04,   0.01,   0,      0,      0,
+             0,     0,     0,     0,      0.01,   0.01,   0.02,   0,      0,      0,
+             0,     0,     0,     0,      0,      0,      0,      0.03,   0.01,   0.015,
+             0,     0,     0,     0,      0,      0,      0,      0.01,   0.03,   0.015,
+             0,     0,     0,     0,      0,      0,      0,      0.015,  0.015,  0.03;
     //R *= 10;
     R *= 0.1;
+
+    //xty:
+
+
+    // 保存基线测量噪声，后续误差拟合只做比例缩放，保持结构稳定。
+    base_R_ = R;
+    yaw_boundary_var_ema_ = std::max(1e-6, (R(4,4) + R(5,5) + R(6,6)) / 3.0);
+    pitch_boundary_var_ema_ = std::max(1e-6, (R(7,7) + R(8,8) + R(9,9)) / 3.0);
+
     ekf.init(P, Q_val, R);
+}
+
+
+//xty:
+
+
+void MotionModel::fitBoundaryErrorAndUpdateR(const VectorY& residual)
+{
+    // yaw 边界观测残差能量（left/right/center）
+    const double yaw_var_now = (
+        residual[4] * residual[4] +
+        residual[5] * residual[5] +
+        residual[6] * residual[6]
+    ) / 3.0;
+
+    // pitch 边界观测残差能量（top/bottom/center）
+    const double pitch_var_now = (
+        residual[7] * residual[7] +
+        residual[8] * residual[8] +
+        residual[9] * residual[9]
+    ) / 3.0;
+
+    // EMA 拟合（抑制抖动，保留趋势）
+    yaw_boundary_var_ema_ = (1.0 - boundary_fit_alpha_) * yaw_boundary_var_ema_ + boundary_fit_alpha_ * yaw_var_now;
+    pitch_boundary_var_ema_ = (1.0 - boundary_fit_alpha_) * pitch_boundary_var_ema_ + boundary_fit_alpha_ * pitch_var_now;
+
+    const double yaw_base_var = std::max(1e-6, (base_R_(4,4) + base_R_(5,5) + base_R_(6,6)) / 3.0);
+    const double pitch_base_var = std::max(1e-6, (base_R_(7,7) + base_R_(8,8) + base_R_(9,9)) / 3.0);
+
+    const double yaw_scale = std::clamp(yaw_boundary_var_ema_ / yaw_base_var, boundary_scale_min_, boundary_scale_max_);
+    const double pitch_scale = std::clamp(pitch_boundary_var_ema_ / pitch_base_var, boundary_scale_min_, boundary_scale_max_);
+
+    for (int i = 4; i <= 6; ++i) {
+        for (int j = 4; j <= 6; ++j) {
+            ekf.ekf.R(i, j) = base_R_(i, j) * yaw_scale;
+        }
+    }
+    for (int i = 7; i <= 9; ++i) {
+        for (int j = 7; j <= 9; ++j) {
+            ekf.ekf.R(i, j) = base_R_(i, j) * pitch_scale;
+        }
+    }
+
+    INFO("boundary fit scale yaw={}, pitch={}", yaw_scale, pitch_scale);
 }
 
 VectorX MotionModel::getPredictResult(const Time::TimeStamp& timestamp)
@@ -193,6 +266,14 @@ void MotionModel::Update(const VectorY& measure_vec, const Time::TimeStamp& time
         measure_adjust[5] = std::remainder(measure_vec[5] - measure_pred[5], 2 * M_PI) + measure_pred[5];
         measure_adjust[6] = std::remainder(measure_vec[6] - measure_pred[6], 2 * M_PI) + measure_pred[6];
 
+        //xty:
+
+
+        // 上下边界 pitch 观测角同样做 2π 展开，避免跨 ±π 跳变。
+        measure_adjust[7] = std::remainder(measure_vec[7] - measure_pred[7], 2 * M_PI) + measure_pred[7];
+        measure_adjust[8] = std::remainder(measure_vec[8] - measure_pred[8], 2 * M_PI) + measure_pred[8];
+        measure_adjust[9] = std::remainder(measure_vec[9] - measure_pred[9], 2 * M_PI) + measure_pred[9];
+
 
         // auto x = ekf.getX();
         // auto theta = x[4]+ M_PI / 2. * armor_id;
@@ -213,6 +294,16 @@ void MotionModel::Update(const VectorY& measure_vec, const Time::TimeStamp& time
         std::cout<<"residual3:"<<residual[3]<<std::endl;
         std::cout<<"residual4:"<<residual[4]<<std::endl;
         std::cout<<"residual5:"<<residual[5]<<std::endl;
+
+        //xty:
+
+
+        std::cout<<"residual7:"<<residual[7]<<std::endl;
+        std::cout<<"residual8:"<<residual[8]<<std::endl;
+        std::cout<<"residual9:"<<residual[9]<<std::endl;
+
+        // yaw + pitch 双轴边界误差拟合，动态调整 R。
+        fitBoundaryErrorAndUpdateR(residual);
 
         // according to residual
         // determine whole car stable & armor stable
