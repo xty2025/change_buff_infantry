@@ -1,3 +1,5 @@
+
+详情见PDF使用
 # AutoAim
 version 0.0.2(unfinished)
 
@@ -229,4 +231,5 @@ AutoAim/
 - 确保相机和串口设备权限正确
 
 ### TODO
+
 查看 `TODO.md` 文件，了解当前开发进度，问题，待办事项。
