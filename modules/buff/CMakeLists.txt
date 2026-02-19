@@ -22,9 +22,11 @@ endforeach()
 # 创建静态库
 add_library(${project_name} STATIC ${CPP_FILES})
 
+
 # 添加头文件目录
 target_include_directories(${project_name} PRIVATE ${CMAKE_SOURCE_DIR}/modules/${project_name})
 target_include_directories(${project_name} PRIVATE ${CMAKE_SOURCE_DIR}/modules)
+
 
 # 链接外部库到模块库
 target_link_libraries(${project_name} PRIVATE third_party_libs)

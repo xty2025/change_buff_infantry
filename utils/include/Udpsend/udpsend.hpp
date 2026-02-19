@@ -53,7 +53,12 @@ private :
     std::vector<float> buffer_;  // 缓冲区
     std::mutex buffer_mutex_;    // 缓冲区互斥锁
     const size_t buffer_limit_ = 1024;  // 缓冲区大小限制
-    
+    /*
+    UdpSend(){};
+    updateConnection(){};
+    bufferData(){};
+    flushBuffer(){};
+    */
     //buffer_.resize(buffer_limit_, 0);  // 后面再填充
 
 public:

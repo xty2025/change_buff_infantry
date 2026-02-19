@@ -13,7 +13,7 @@ def read_custom_data(filename):
             items = line.strip().split(',')
             if len(items) != 4 :
                 continue
-            ##每次pitch和yawl读到4个数据
+            ##每次pitch，yawl读到4个数据
             ##add
             # if len(items) != 4 or ':' not in items[0] or ':' not in items[1] or ':' not in items[2] or ':' not in items[3]:
             #     continue
@@ -36,14 +36,18 @@ def square_func(x, A, B, C, D):
     """二次函数模型"""
     return A * x[0] * x[1] + B * x[0] + C * x[1] + D 
 
+def log_func(x,A,B,C,D):
+    """对数函数模型"""
+    return A * np.log(B * x[0] + C * x[1])+D
+
 def calculate_residuals(y_true, y_pred):
-    """计算残差"""
+    """计算残差"""                                  
     return np.average(np.abs(y_true - y_pred))
   
     #标准的
 def calculate_std_residuals(y_true,y_pred):
     #return np.std(y_true - y_pred)
-    return sqrt(np.sum(y_true-y_pred)**2/len(y_true))   
+    return np.sqrt(np.sum(y_true-y_pred)**2/len(y_true))   
 
 
 def calculate_residuals_mean(y_true, y_pred):
@@ -87,7 +91,7 @@ def main(train_filename,test=False,test_filename=None):
         print('二次模型测试残差:', residuals_square_test)
         print('线性模型测试残差均值:', residuals_linear_test_mean)
         print('二次模型测试残差均值:', residuals_square_test_mean)
-        # 读取数据
+
     x, x1, y, _ = read_custom_data('1.txt')
     ##把读到的数据login-info到1.txt中。
     print("data size:", len(x), len(x1), len(y))

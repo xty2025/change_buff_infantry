@@ -33,10 +33,12 @@ def get_local_ip():
     获取本机 IP 地址，要求格式为 192.168.137.*
     如果存在多个符合条件的地址，则返回第一个符合的地址；否则返回 None
     """
+    ##xty:
     import socket
     # 第一种方式：从 gethostbyname_ex 获取所有地址
     try:
         hostname = socket.gethostname()
+        #hostname,alialist,ipaddrlist
         ips = socket.gethostbyname_ex(hostname)[2]
         for ip in ips:
             if ip.startswith("192.168.137."):
@@ -125,11 +127,11 @@ def kill_aim():
         logging.error(f"可能需要sudo visudo配置免密码权限，添加：hustlyrm ALL=(ALL) NOPASSWD: /bin/kill")
         return False
     
-#flask 注册的前端页面127.0.0。1：8081/stream
+#flask 注册的前端页面127.0.0.1:8081/stream
 '''index() (Flask 路由 '/')
 
 作用：渲染 editor.html 模板并注入 server_time 变量（当前时间字符串）。
-返回：HTML 页面响应。
+返回：HTML 页面响应。           
 要点：该 HTML 负责前端 UI，通常会使用 /video_feed 来显示视频。'''
 @app.route('/')
 def index():

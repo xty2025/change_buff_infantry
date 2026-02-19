@@ -185,7 +185,9 @@ void cameraCalib(std::unique_ptr<Driver> &driver)
 
     std::cout << "退出标定" << std::endl;
 
-    if (count > 1) { // 至少保存了一张图片才压缩 (原先是 >5)
+    //if (count > 1)
+    if (count >=5)
+    { // 至少保存了一张图片才压缩 (原先是 >5,那就改回5)
         std::cout << "正在压缩标定数据..." << std::endl;
         // 确保路径正确，特别是在不同操作系统上
         std::string command;

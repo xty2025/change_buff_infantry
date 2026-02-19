@@ -14,8 +14,6 @@ std::stack<int>stk
 std::function<Predictions(Param::param)>PredictionFunc()
 std::function<Prediction(Time::TimeStamp)>PredictionFunc2()
 */
-
-
 namespace controller
 {
     using predictor::Armor;

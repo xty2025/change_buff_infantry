@@ -2,12 +2,13 @@
 #include "driver/driver.hpp"
 #include "Log/log.hpp"
 #include <Udpsend/udpsend.hpp>
-
+//打印的相同。原始和setpoint
 namespace power_rune {
     BuffController::BuffController() {   }
 
     BuffController::~BuffController() {   }
-    BuffControlResult BuffController::buff_control(const ParsedSerialData& parsedData, std::shared_ptr<float> buff_pitch, std::shared_ptr<float> buff_yaw) const //TODO
+    BuffControlResult BuffController::buff_control
+    (const ParsedSerialData& parsedData, std::shared_ptr<float> buff_pitch, std::shared_ptr<float> buff_yaw) const //TODO
     {
         BuffControlResult result;
         result.yaw_setpoint = parsedData.yaw_now;
@@ -31,12 +32,16 @@ namespace power_rune {
         {
             std::cout<<"buff_yaw:"<<*buff_yaw<<std::endl;
             result.yaw_setpoint = *buff_yaw;
+            //转换成最近角。yaw会但pitch不用
+            //actual->上游想要的角度。
+            //set->发送给下位机的
             result.yaw_setpoint = parsedData.yaw_now + std::remainder(result.yaw_setpoint - parsedData.yaw_now, 360.0);
-            std::cout<<"buff_pitch:"<<*buff_pitch<<std::endl;
-            result.pitch_setpoint = *buff_pitch;
-            
-            result.pitch_actual_want = *buff_pitch;
             result.yaw_actual_want = *buff_yaw;
+            
+            std::cout<<"buff_pitch:"<<*buff_pitch<<std::endl;
+            result.pitch_setpoint = *buff_pitch;          
+            result.pitch_actual_want = *buff_pitch;
+   
             result.valid = true;
             result.shoot_flag = true; 
             

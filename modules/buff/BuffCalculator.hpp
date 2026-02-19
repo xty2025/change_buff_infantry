@@ -7,19 +7,19 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/core/eigen.hpp>
 #include <random>
-#include <shared_mutex> //MUTEX
+#include <shared_mutex> 
 #include <thread>
 #include "Param/param.hpp"
-
 #define ANGLE_BETWEEN_FAN_BLADES (72 * CV_PI / 180)
 #define MIN_FIT_DATA_SIZE 20
 #define MAX_FIT_DATA_SIZE 12000
-
-enum class Direction { UNKNOWN, STABLE, ANTI_CLOCKWISE, CLOCKWISE };  // 旋转方向
-enum class Convexity { UNKNOWN, CONCAVE, CONVEX };                    // 拟合曲线凹凸性
-
+enum class Direction { UNKNOWN, STABLE, ANTI_CLOCKWISE, CLOCKWISE };  
+enum class Convexity { UNKNOWN, CONCAVE, CONVEX };
+/*
+Convexity c=getConvexity(data);
+if(c==Convexity::CONVEX){//convexity;}
+*/
 #define CONSOLE_OUTPUT 2
-
 static std::atomic<bool> STOP_THREAD(false);
 static std::atomic<bool> VALID_PARAMS(false);
 static std::mutex MUTEX; //MUTEX
@@ -36,7 +36,7 @@ inline std::pair<double, double> solveQuadraticEquation(double a, double b, doub
                                      (-b + sqrt((double)(b * b - 4 * a * c))) / (2 * a));
     return result;
 }
-
+//frame()的赋值.capture()
 struct Frame {
     Frame() = default;
     Frame(const cv::Mat& image, const std::chrono::steady_clock::time_point& time, double pitch, double yaw, double roll)
@@ -45,7 +45,7 @@ struct Frame {
     std::chrono::steady_clock::time_point m_time;
     double m_roll, m_pitch, m_yaw;
     void set(const cv::Mat& image, const std::chrono::steady_clock::time_point& time, double pitch,
-             double yaw, double roll) {
+             double yaw, double roll){
         m_image = image;
         m_time = time;
         m_roll = roll;
@@ -314,6 +314,7 @@ inline double getAngleBig(double time, const std::array<double, 5> &params) noex
     return -params[0] * std::cos(params[1] * (time + params[2])) + params[3] * time + params[4];
 }
 
+//brief和@param之间需要空一行，否则会报错。给机器看的注释。
 /**
  * @brief 得到大符旋转角度，这里是相对于最后一次识别，预测的旋转角
  * @param[in] distance      到装甲板中心的距离

@@ -18,10 +18,10 @@ using namespace recording;
 //3.日志完善
 //4. FATAL 大小装甲板
 //5. detector ROI 变换检查
-
 // 控制指令最好不要以超高频率发送
 // 控制指令间隔不能较长，须保证串口处于激活状态
 // 对多线程共享变量的赋值不能极高频率，否则可能导致另一个线程无法访问。
+//change_buff_model。
 
 std::map<std::string, int> enemyTrans = {
     {"red", 0},
@@ -34,12 +34,20 @@ std::map<std::string, int> enemyTrans = {
 int main() {
     param::Param param("../config.json");
     param = param[param["car_name"].String()];
+    //param=param["infantry"]所有参数；param[param["car_name"].String()];
+    //config{carname:quanxiang;quanxiang:{all_param};};
     bool udp_enable = param["UDP"]["enable"].Bool();
     bool web_debug_enable = param["web_debug"].Bool();
     bool shoot_enable = param["shoot_enable"].Bool();
     bool record_enable = param["record_enable"].Bool();
     bool force_shoot = param["force_shoot"].Bool();
     bool draw_debug_image = param["debug_on_image"].Bool();
+
+    //xty::
+
+
+
+    bool draw_overlay = draw_debug_image || web_debug_enable;
     /*bool udp_enable = param["UDP"]["enable"].Bool();: 从配置中读取 UDP 字段下的 enable 键，并将其布尔值赋给 udp_enable 变量。这决定了是否启用 UDP 通信。
 bool web_debug_enable = param["web_debug"].Bool();: 读取 web_debug 键的布尔值，决定是否启用网页调试功能。
 bool shoot_enable = param["shoot_enable"].Bool();: 读取 shoot_enable 键的布尔值，决定是否允许射击。
@@ -60,7 +68,14 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
     auto driver = createDriver();
     //auto driver = createReplayer("../record/test.mkv", "../record/20250528144828.txt", true, 1);
     //auto solver = createSolver(param["X"].Double(), param["Y"].Double(), param["X1"].Double(),
-    //                            param["Y1"].Double(), param["X2"].Double(), param["Y2"].Double());
+    //                            param["Y1"].Double(),
+    //param["X2"].Double(), param["Y2"].Double();
+    
+
+    //xty::
+    //每个modules.hpp中用share_ptr创建共享指针。
+    // std::shared_ptr<Controller> createController(param::Param json_param);
+    //std::shared_ptr<Solver> createSolver(param::Param json_param);
     auto solver = createSolver(param["solver"]);
     auto controller = createController(param["controller"]);
     auto predictor = createPredictor();
@@ -80,12 +95,9 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
     bool buff_success = false;// 大能量机关计算是否成功
     bool reload_big_buff = true;// 是否重新加载大能量机关
     // 新增共享变量
-
 // 新增共享变量，用于在不同线程间传递大能量机关的瞄准角度
     std::shared_ptr<float> buff_pitch = std::make_shared<float>(0.0);
     std::shared_ptr<float> buff_yaw = std::make_shared<float>(0.0);
-    
-
     //xjj
   // 将姿态解算器注册到location模块，用于坐标系转换
     location::Location::registerSolver(solver);
@@ -93,6 +105,7 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
 
 // 将预测器的预测函数注册到控制器中，使控制器可以使用预测结果
     controller->registPredictFunc(predictor->predictFunc());
+
 //    auto predictFunc = predictor->predictFunc();
 //    controller->registPredictFunc([&predictFunc,&solver,&imu](Time::TimeStamp timestamp) {
 //        auto result = predictFunc(timestamp);
@@ -101,6 +114,7 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
 
 
 // 配置串口和相机
+//type.hpp
     SerialConfig config{param["serial_name"].String(), param["baud_rate"].Int()};
     CameraConfig cameraConfig{
         .cameraSN = param["camera_id"].String(), //前后相机
@@ -110,9 +124,16 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
     };
     driver->setSerialConfig(config);
     driver->setCameraConfig(cameraConfig);
+    //namespace->driver{class Dirver:public Serial(namespace serial),public Camera(namespace camera)}
+    
     // 注册串口读取回调函数，该函数在收到新串口数据时被调用
-    driver->registReadCallback([control_func = driver->sendSerialFunc() ,controller, &buff_success, buff_controller, &hitBuff, buff_pitch, buff_yaw, shoot_enable,force_shoot,record_enable](const ParsedSerialData& parsedData) {
-        
+    //driver->registeReadCallback(std::function<void(const ParsedSerialData&)>callback);
+    driver->registReadCallback(
+    [control_func = driver->sendSerialFunc() ,controller, &buff_success, buff_controller, &hitBuff, buff_pitch, buff_yaw, shoot_enable,force_shoot,record_enable]
+    (const ParsedSerialData& parsedData)
+    {
+    //lambda:[捕获列表](捕获参数)->返回对象(函数体)
+    //control_func = driver->sendSerialFunc() 捕获 driver->sendSerialFunc() 返回的 std::function<void(const ControlResult&)> 并命名为 control_func    
         ControlResult result;  
         if(record_enable)
         {
@@ -126,9 +147,10 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
             if(force_shoot) result.shoot_flag = 1;
             // 如果强制射击，则设置射击标志
             result.shoot_flag = shoot_enable? result.shoot_flag : 0;
+
             // 根据配置决定是否允许射击
             control_func(result);
-            std::cout<<"7777"<<std::endl;
+            std::cout<<"7777"<<std::endl;//打车
         }
         else //buff
         {
@@ -155,6 +177,8 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
                 UdpSend::sendData((float)parsedData.yaw_now);
                 UdpSend::sendTail();
     });
+    //end registerCallBack。
+
     driver->runSerialThread();
     driver->runCameraThread();
 
@@ -173,6 +197,7 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
             //INFO("Waiting for new camera data...");
             continue;
         }
+        //静止或检测不到新的车。
         clearScreenNoDelete();
         //if multiple frame, get the latest one and discard the others
         std::queue<std::shared_ptr<TimeImageData>> camera_data_pack;
@@ -187,6 +212,9 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
         if(autoEnemy)
             detector->setEnemyColor(1 - receive_enemy_color);
         driver->clearSerialData();
+        //std::shared_ptr<TimeImageData> 检测到新的视频进队，取第一帧，算时间并
+        //更新，更新imu数据为读到的数据，更新color。
+        
 
 
         // std::vector<Prediction> predictions;
@@ -227,6 +255,31 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
             reload_big_buff = true; //for big buff
             //TODO
             auto detections = detector->detect(frame->image);
+
+            //xty::
+
+
+
+            if (draw_overlay) {
+                for (const auto& armor_det : detections.first) {
+                    cv::rectangle(frame->image, armor_det.bounding_rect, cv::Scalar(0, 255, 255), 2);
+                    std::string armor_label = "armor id=" + std::to_string(armor_det.tag_id) +
+                                              " s=" + std::to_string(armor_det.score).substr(0, 4);
+                    cv::putText(frame->image, armor_label, armor_det.bounding_rect.tl() + cv::Point2f(0, -6),
+                                cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 255), 2);
+                    INFO("armor detection rect: x={}, y={}, w={}, h={}", armor_det.bounding_rect.x,
+                         armor_det.bounding_rect.y, armor_det.bounding_rect.width, armor_det.bounding_rect.height);
+                }
+                for (const auto& car_det : detections.second) {
+                    cv::rectangle(frame->image, car_det.bounding_rect, cv::Scalar(255, 0, 0), 2);
+                    std::string car_label = "car id=" + std::to_string(car_det.tag_id) +
+                                            " s=" + std::to_string(car_det.score).substr(0, 4);
+                    cv::putText(frame->image, car_label, car_det.bounding_rect.tl() + cv::Point2f(0, -6),
+                                cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 0, 0), 2);
+                    INFO("car detection rect: x={}, y={}, w={}, h={}", car_det.bounding_rect.x,
+                         car_det.bounding_rect.y, car_det.bounding_rect.width, car_det.bounding_rect.height);
+                }
+            }
             tracker->merge(detections.first);
             tracker->merge(detections.second);
             isLastDetected = tracker->isDetected();
@@ -251,7 +304,12 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
                 //XYZ tmp = trackResult.location.xyz_imu;
                 //trackResult.location.xyz_imu = tmp; 
                 trackResult.yaw = yaw;
-                if(draw_debug_image) {
+
+                //xty::
+
+
+
+                if(draw_overlay) {
                     CXYD coord = trackResult.location.cxy;
                     cv::circle(frame->image, cv::Point(coord.cx, coord.cy), 12, cv::Scalar(255, 255, 0), -1);
                     location::Location temp;
@@ -288,7 +346,12 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
                 auto car_id = trackResult.car_id;
                 auto car_type = trackResult.car_type;
                 auto bounding_rect = trackResult.bounding_rect;
-                if(draw_debug_image) {
+
+                //xty::
+
+
+
+                if(draw_overlay) {
                     cv::rectangle(frame->image, bounding_rect, cv::Scalar(255, 0, 0), 5);
                     cv::putText(frame->image, std::to_string(car_id), bounding_rect.tl(), cv::FONT_HERSHEY_SIMPLEX, 0.5,
                                 cv::Scalar(255, 0, 0), 5);
@@ -299,7 +362,12 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
             INFO("TrackResults size: {}", trackResults.first.size());
             predictor->update(trackResults, frame->timestamp);
 
-        if(draw_debug_image) {
+
+        //xty::
+
+
+
+        if(draw_overlay) {
             //DEBUG
             auto predictions = predictor->predict(frame->timestamp + 100ms);
             //visualize predictions on frame
@@ -390,12 +458,29 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
             if (buff_detector.buffDetect(frame->image, enemy_color) == false) {
                 std::cout<<"detectfail"<<std::endl;
                 buff_success = false;
+
+                //xty::
+
+
+
+                if (draw_overlay) {
+                    buff_detector.drawDebugOverlay(frame->image, true);
+                }
             }
             else{
                 std::cout<<"detectsuccess"<<std::endl;
+
+                //xty::
+
+
+
+                if (draw_overlay) {
+                    buff_detector.drawDebugOverlay(frame->image, true);
+                }
                 auto buffCameraPoints{buff_detector.getCameraPoints()}; //R标+裝甲板5點
                 // buff_calculator
                 //这里应該要整入time了
+                //buff+time predict。
                 buff_calculator.buff_frame.set(frame->image, std::chrono::steady_clock::now(), imu.pitch_now, imu.yaw_now, imu.roll_now); //pitch, yaw, roll
                 std::cout<<"imu.actual_bullet_speed:"<<imu.actual_bullet_speed<<std::endl;
                 bool buffResult = buff_calculator.calculate(buff_calculator.buff_frame, buffCameraPoints, buff_mode, imu.actual_bullet_speed > 20.0 ? imu.actual_bullet_speed*100 : 24.0 * 100 , reload_big_buff); 
@@ -444,6 +529,7 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
     }
     return 0;
 }
+//data_finish
 
 /*
 配置读取: 首先，它从 config.json 文件中读取所有配置参数，并根据这些参数决定是否启用 UDP、网页调试、录像等功能。

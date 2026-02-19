@@ -4,8 +4,6 @@
 #include <memory>
 #include <stdexcept>
 #include "Log/log.hpp"  // 使用 aimlog 中的 ERROR 宏
-
-
 /*实际的坐标转换由Solver类实现，它继承自BaseSolver：
 
 1. 1.
@@ -55,8 +53,6 @@ struct XYV {
 
 
 namespace solver {
-
-
     /*
     ### 1. 非融合代理类
 - XYZProxy ：用于操作非融合的XYZ坐标
@@ -91,23 +87,7 @@ public:
 // 融合数据通过 camera2world(base_pyd_, imu) 得到，即 fused_pyd_；进而 xyz_imu 与 cxy_imu 由 fused_pyd_ 转换得出。
 namespace location {
     class Location {
-    private :
-    
-        void updateFused() {
-            if (!solverRegistered_) {
-                ERROR("Solver not registered. updateFused failed.");
-                return;
-            }
-            fused_xyz_ = solverInstance_->camera2world(base_xyz_, imu);
-        }
 
-        // 内部数据存储
-        XYZ base_xyz_;  // 非融合的基础 xyz 数据
-        XYZ fused_xyz_; // 融合后的 xyz 数据
-
-        // 静态全局变量
-        inline static std::shared_ptr<const solver::BaseSolver> solverInstance_;
-        inline static bool solverRegistered_;
         //xty:
         //XYZProxy xyz_{*this};
         //PYDProxy pyd_{*this};
@@ -328,7 +308,7 @@ namespace location {
         }
 
         PYD imu;  // imu 数据
-/*
+
     private:
         // 更新融合数据
         void updateFused() {
@@ -346,6 +326,6 @@ namespace location {
         // 静态全局变量
         inline static std::shared_ptr<const solver::BaseSolver> solverInstance_;
         inline static bool solverRegistered_;
-*/
+
     };
 }

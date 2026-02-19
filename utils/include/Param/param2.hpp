@@ -33,6 +33,12 @@ public:
         if(!json_.contains(key)){ERROR("{}",key);
         return json_.at(key).template get<T>();}
     }
+    
+    template<typename T>
+    T to()const {
+        return json_.template get<T>();
+        //不考虑键值。
+    }
 };
 
 };
