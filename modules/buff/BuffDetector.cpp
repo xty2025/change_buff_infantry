@@ -5,6 +5,7 @@
 
 
 #include <array>
+#include <algorithm>
 #include <iomanip>
 #include <sstream>
 
@@ -48,10 +49,12 @@ bool BuffDetector::buffDetect(const cv::Mat& frame, int enemy_color) {
 
 
     m_has_valid_armor = false;
+    m_armors.clear();
     m_has_raw_detect = false;
     m_last_boxes.clear();
     m_last_keypoints.clear();
     m_last_class_ids.clear();
+    m_last_confidences.clear();
     m_last_confidence = 0.0f;
     std::cout<<m_enemy_color<<"5555555555555"<<std::endl;
 
@@ -195,78 +198,109 @@ bool BuffDetector::findBuffArmor(Armor& armor) {
     // 获取输出张量
     ov::Tensor output_tensor = request.get_output_tensor();
     const float* output_data = output_tensor.data<float>();
-    // 提取置信度最高的检测结果
-    std::vector<float> highest_result(output_data, output_data + 24);  
-    //可能有多个
-    // 解析检测框和关键点
-    // int num_keypoints = 6;  // 关键点数量
-    std::vector<int> class_ids;
-    float confidence = highest_result[4];
-    if(confidence < 0.8) {
-        // cv::resize(image2show_detect, image2show_detect, cv::Size(), 0.5, 0.5, cv::INTER_LINEAR);
-        // cv::imshow("Detection Result", image2show_detect); 
-        // cv::resize(m_imageShow, m_imageShow, cv::Size(), 0.5, 0.5, cv::INTER_LINEAR);
-        // cv::imshow("visualized", m_imageShow); 
-        // cv::waitKey(1);
-        return false;
-    }
-    std::vector<cv::Rect> boxes;
-    std::vector<cv::Point2f> keypoints;
-    
-    // bool is_out = false;
+    const std::size_t det_stride = 24;
+    const std::size_t det_count = output_tensor.get_size() / det_stride;
 
-    // 提取目标框坐标、置信度、类别ID和关键点信息
-    float box_x_min = highest_result[0];
-    float box_y_min = highest_result[1];
-    float box_x_max = highest_result[2];
-    float box_y_max = highest_result[3];
-    if(box_x_min <= 0 || box_y_min <= 0 || box_x_max >= MODEL_IMG_SIZE || box_y_max >= MODEL_IMG_SIZE) {
-        is_out = true;
-        std::cout<<"out of image range (416)!!!!"<<std::endl;
-        return false;
+    struct Candidate {
+        float confidence = 0.0f;
+        int class_id = -1;
+        cv::Rect box;
+        std::vector<cv::Point2f> keypoints;
+        Armor armor;
+    };
+
+    std::vector<Candidate> candidates;
+    candidates.reserve(det_count);
+
+    for (std::size_t di = 0; di < det_count; ++di) {
+        const float* det = output_data + di * det_stride;
+        float confidence = det[4];
+        if (confidence < 0.8f) {
+            continue;
+        }
+
+        float box_x_min = det[0];
+        float box_y_min = det[1];
+        float box_x_max = det[2];
+        float box_y_max = det[3];
+        if (box_x_min <= 0 || box_y_min <= 0 || box_x_max >= MODEL_IMG_SIZE || box_y_max >= MODEL_IMG_SIZE) {
+            continue;
+        }
+
+        Candidate c;
+        c.confidence = confidence;
+        c.class_id = static_cast<int>(det[5]);
+        c.box = cv::Rect(box_x_min, box_y_min, box_x_max - box_x_min, box_y_max - box_y_min);
+        c.keypoints.reserve(num_keypoints);
+        for (int i = 0; i < num_keypoints; ++i) {
+            float keypoint_x = det[6 + i * 3];
+            float keypoint_y = det[7 + i * 3];
+            c.keypoints.emplace_back(keypoint_x, keypoint_y);
+        }
+
+        std::vector<cv::Rect> one_box{c.box};
+        std::vector<cv::Point2f> one_kp = c.keypoints;
+        if (!change_scale(globalImage_3, one_box, one_kp, c.armor, MODEL_IMG_SIZE)) {
+            continue;
+        }
+        c.box = one_box[0];
+        c.keypoints = one_kp;
+        candidates.emplace_back(std::move(c));
     }
 
-    int class_id = static_cast<int>(highest_result[5]);
-
-    for (int i = 0; i < num_keypoints; ++i) {
-        float keypoint_x = highest_result[6 + i * 3];
-        float keypoint_y = highest_result[7 + i * 3];
-        float keypoint_score = highest_result[8 + i * 3];
-       // std::vector<cv::Point2f>keypoints;
-        keypoints.push_back(cv::Point2f(keypoint_x, keypoint_y));
-    }
-    // 保存到对应的变量中
-    class_ids.push_back(class_id);//全一个值
-    boxes.push_back(cv::Rect(box_x_min, box_y_min, box_x_max - box_x_min, box_y_max - box_y_min));
-    std::cout<<"keybox:"<<box_x_min<<", "<<box_y_min<<", "<<box_x_max - box_x_min<<", "<<box_y_max - box_y_min<<std::endl;
-    std::cout<<"keypoints:"<<std::endl;
-    for(const auto& keypoint : keypoints){
-        std::cout<<keypoint.x<<", "<<keypoint.y<<std::endl;
-        cv::circle(letterbox_img, cv::Point2f(keypoint.x, keypoint.y), 2, (255,255,255), 2);
-    }
-    // cv::imshow("drawkeypoint", letterbox_img);
-
-    // 将 letterbox 后的坐标映射回原始图像：调用封装函数
-    //（xty::function）
-    if (!change_scale(globalImage_3, boxes, keypoints, armor, MODEL_IMG_SIZE)) {
-        is_out = true;
+    if (candidates.empty()) {
         return false;
     }
 
-    m_last_boxes = boxes;
-    m_last_keypoints = keypoints;
-    m_last_class_ids = class_ids;
-    m_last_confidence = confidence;
+    std::sort(candidates.begin(), candidates.end(), [](const Candidate& a, const Candidate& b) {
+        return a.confidence > b.confidence;
+    });
+
+    if (candidates.size() > 2) {
+        candidates.resize(2);
+    }
+
+    m_armors.clear();
+    m_last_boxes.clear();
+    m_last_keypoints.clear();
+    m_last_class_ids.clear();
+    m_last_confidences.clear();
+
+    for (const auto& c : candidates) {
+        m_armors.push_back(c.armor);
+        m_last_boxes.push_back(c.box);
+        m_last_class_ids.push_back(c.class_id);
+        m_last_confidences.push_back(c.confidence);
+        m_last_keypoints.insert(m_last_keypoints.end(), c.keypoints.begin(), c.keypoints.end());
+    }
+    m_last_confidence = m_last_confidences.front();
     m_has_raw_detect = true;
-    
-    armor.setRoiArmor(keypoints);
 
-    // 绘制检测框和关键点
-    draw_boxes_keypoints(image2show_detect, boxes, confidence, class_ids, keypoints);
+    armor = m_armors.front();
+
+    // 绘制检测框和关键点（用于本地调试窗口）
+    draw_boxes_keypoints(image2show_detect, m_last_boxes, m_last_confidence, m_last_class_ids, m_last_keypoints);
     cv::resize(image2show_detect, image2show_detect, cv::Size(), 0.5, 0.5, cv::INTER_LINEAR);
     // cv::imshow("Detection Result", image2show_detect); 
     // cv::waitKey(1);
     return true;
+}
+
+int BuffDetector::getDetectedArmorCount() const {
+    return static_cast<int>(m_armors.size());
+}
+
+std::vector<cv::Point2f> BuffDetector::getCameraPointsByIndex(std::size_t index) const {
+    if (m_armors.empty()) {
+        return {};
+    }
+
+    if (index >= m_armors.size()) {
+        index = 0;
+    }
+
+    const auto& a = m_armors[index];
+    return {a.m_0p, a.m_1p, a.m_2p, a.m_3p, a.m_4p, a.m_5p};
 }
 
 

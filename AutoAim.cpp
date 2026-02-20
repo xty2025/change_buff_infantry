@@ -9,6 +9,8 @@
 #include <VideoStreamer/VideoStreamer.hpp>
 #include <Recorder/recorder.hpp>
 #include <Location/location.hpp>
+#include <chrono>
+#include <atomic>
 using namespace modules;
 using namespace aimlog;
 using namespace recording;
@@ -94,6 +96,13 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
     int buff_mode = 0;// 大能量机关模式
     bool buff_success = false;// 大能量机关计算是否成功
     bool reload_big_buff = true;// 是否重新加载大能量机关
+    bool buff_two_target_cycle = false;
+    std::chrono::steady_clock::time_point buff_cycle_start = std::chrono::steady_clock::now();
+    int buff_primary_idx = 0;
+    int buff_secondary_idx = 1;
+    auto buff_dual_target_active = std::make_shared<std::atomic<bool>>(false);
+    auto buff_switch_to_second = std::make_shared<std::atomic<bool>>(false);
+    auto buff_prev_shoot_cmd = std::make_shared<std::atomic<bool>>(false);
     // 新增共享变量
 // 新增共享变量，用于在不同线程间传递大能量机关的瞄准角度
     std::shared_ptr<float> buff_pitch = std::make_shared<float>(0.0);
@@ -129,7 +138,8 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
     // 注册串口读取回调函数，该函数在收到新串口数据时被调用
     //driver->registeReadCallback(std::function<void(const ParsedSerialData&)>callback);
     driver->registReadCallback(
-    [control_func = driver->sendSerialFunc() ,controller, &buff_success, buff_controller, &hitBuff, buff_pitch, buff_yaw, shoot_enable,force_shoot,record_enable]
+    [control_func = driver->sendSerialFunc() ,controller, &buff_success, buff_controller, &hitBuff, buff_pitch, buff_yaw, shoot_enable,force_shoot,record_enable,
+     buff_dual_target_active, buff_switch_to_second, buff_prev_shoot_cmd]
     (const ParsedSerialData& parsedData)
     {
     //lambda:[捕获列表](捕获参数)->返回对象(函数体)
@@ -159,6 +169,14 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
             BuffControlResult buff_result = buff_controller.buff_control(parsedData, buff_pitch, buff_yaw);
             if(force_shoot) buff_result.shoot_flag = 1;
             buff_result.shoot_flag = shoot_enable? buff_result.shoot_flag : 0;
+
+            // 不依赖剩余弹量：首发发射指令上升沿后，立即切换到第二目标
+            bool shoot_cmd_now = (buff_result.shoot_flag != 0);
+            bool shoot_cmd_prev = buff_prev_shoot_cmd->load();
+            if (buff_dual_target_active->load() && !buff_switch_to_second->load() && !shoot_cmd_prev && shoot_cmd_now) {
+                buff_switch_to_second->store(true);
+            }
+            buff_prev_shoot_cmd->store(shoot_cmd_now);
             
             result.shoot_flag = buff_result.shoot_flag;
             result.pitch_setpoint = buff_result.pitch_setpoint;
@@ -471,13 +489,63 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
                 std::cout<<"detectsuccess"<<std::endl;
 
                 //xty::
-
+                //新加：buff_dual_target_active,buff_switch_to_second,buff_prev_shoot_cmd
 
 
                 if (draw_overlay) {
                     buff_detector.drawDebugOverlay(frame->image, true);
                 }
-                auto buffCameraPoints{buff_detector.getCameraPoints()}; //R标+裝甲板5點
+                int detected_buff_cnt = buff_detector.getDetectedArmorCount();
+                if (detected_buff_cnt <= 0) {
+                    //xty::更改此处逻辑，不加哨兵的大偏角。
+                    *buff_pitch = imu.pitch_now ;
+                    *buff_yaw = imu.yaw_now ;
+                    buff_success = false;
+                    buff_two_target_cycle = false;
+                    buff_dual_target_active->store(false);
+                    buff_switch_to_second->store(false);
+                    buff_prev_shoot_cmd->store(false);
+                    continue;
+                }
+
+                int selected_idx = 0;
+                if (detected_buff_cnt == 1) {
+                    // 1个目标：保持原单目标逻辑，不做双目标切换
+                    selected_idx = 0;
+                    buff_two_target_cycle = false;
+                    buff_dual_target_active->store(false);
+                    buff_switch_to_second->store(false);
+                    buff_prev_shoot_cmd->store(false);
+                } else {
+                    auto now_tp = std::chrono::steady_clock::now();
+                    if (!buff_two_target_cycle) {
+                        buff_two_target_cycle = true;
+                        buff_cycle_start = now_tp;
+                        buff_primary_idx = 0;
+                        buff_secondary_idx = 1;
+                        buff_dual_target_active->store(true);
+                        buff_switch_to_second->store(false);
+                        buff_prev_shoot_cmd->store(false);
+                    }
+
+                    double elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now_tp - buff_cycle_start).count() / 1000.0;
+                    if (elapsed > 1.0) {
+                        buff_cycle_start = now_tp;
+                        buff_switch_to_second->store(false);
+                        buff_prev_shoot_cmd->store(false);
+                    }
+
+                    // 2个目标：首发后立即切向第二目标
+                    selected_idx = buff_switch_to_second->load() ? buff_secondary_idx : buff_primary_idx;
+                }
+
+                auto buffCameraPoints{buff_detector.getCameraPointsByIndex(static_cast<std::size_t>(selected_idx))}; //R标+裝甲板5點
+                if (buffCameraPoints.size() != 6) {
+                    *buff_pitch = imu.pitch_now + 90.0;
+                    *buff_yaw = imu.yaw_now + 90.0;
+                    buff_success = false;
+                    continue;
+                }
                 // buff_calculator
                 //这里应該要整入time了
                 //buff+time predict。

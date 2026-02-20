@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <opencv2/opencv.hpp>
 #include <openvino/openvino.hpp>
 
@@ -68,9 +69,11 @@ class BuffDetector {
 
 
         bool m_has_valid_armor = false;
+        std::vector<Armor> m_armors;
         std::vector<cv::Rect> m_last_boxes;
         std::vector<cv::Point2f> m_last_keypoints;
         std::vector<int> m_last_class_ids;
+        std::vector<float> m_last_confidences;
         float m_last_confidence = 0.0f;
         bool m_has_raw_detect = false;
 
@@ -97,6 +100,8 @@ class BuffDetector {
             // cv::imshow("visualized", m_imageShow); 
         }
         bool findBuffArmor(Armor& armor);
+        int getDetectedArmorCount() const;
+        std::vector<cv::Point2f> getCameraPointsByIndex(std::size_t index) const;
 
         /**
          * @brief
@@ -104,11 +109,7 @@ class BuffDetector {
          * @return std::vector<cv::Point2f>
          */
         inline std::vector<cv::Point2f> getCameraPoints() {//DONE 5.5
-            // return {m_armor.m_0p,                   m_armor.m_2p,
-            //         m_armor.m_3p, m_armor.m_4p, m_armor.m_5p,
-            //         m_armor.m_6p};
-            return {m_armor.m_0p, m_armor.m_1p, m_armor.m_2p,
-                    m_armor.m_3p, m_armor.m_4p, m_armor.m_5p};
+            return getCameraPointsByIndex(0);
         }
 };
 

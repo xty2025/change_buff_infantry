@@ -47,7 +47,7 @@
             "SMALL_POWER_RUNE_ROTATION_SPEED": 1.04719,
             "armor_width": 270,
             "red_buff_model_path": "../utils/buff_models/red_buff/best.xml",
-            "blue_buff_model_path": "../utils/buff_models/blue_buff_debug/best.xml",
+            "blue_buff_model_path": "../utils/buff_models/buff_blue_xtynew/best.xml",
             "buff_size": 270,
             "max_distance_to_buff": 20,
             "min_distance_to_buff": 3,
