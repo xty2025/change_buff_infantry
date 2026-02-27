@@ -2,9 +2,9 @@
     "car_name": "quanxiang",
     "quanxiang": {
         "UDP": {
-            "enable": false,
-            "ip": "192.168.137.1",
-            "port": 4096
+            "enable": true,
+            "ip":"192.168.137.1",
+            "port": 1347
         },
         "auto_white_balance": true,
         "baud_rate": 115200,
@@ -19,7 +19,7 @@
             "GRAVITY": 9.8,
             "SMALL_POWER_RUNE_ROTATION_SPEED": 1.04719,
             "armor_width": 270,
-            "blue_buff_model_path": "/home/user/桌面/new_INFANTRY/AutoAim_infantry/utils/buff_models/buff_blue_xtynew/best.xml",
+            "blue_buff_model_path": "../utils/buff_models/buff_blue_xtynew/best.xml",
             "buff_size": 270,
             "force_stable": false,
             "max_distance_to_buff": 20,
@@ -39,13 +39,13 @@
                 0,
                 0
             ],
-            "mouse_require": true,
+            "mouse_require": false,
             "pic_camera_x": 640,
             "pic_camera_y": 512,
             "response_speed": 0.01,
             "shoot_delay": 0
         },
-        "debug_on_image": false,
+        "debug_on_image": true,
         "detector": {
             "#model_path": "../utils/models/BRpoints_nano.xml",
             "car_model_path": "../utils/models/yolo11n-416sgd4.xml",
@@ -53,7 +53,7 @@
             "use_old_model": true
         },
         "enemy_color": "auto",
-        "exposure_time": 7000,
+        "exposure_time": 3000,
         "force_shoot": false,
         "gain": 16,
         "record_enable": true,

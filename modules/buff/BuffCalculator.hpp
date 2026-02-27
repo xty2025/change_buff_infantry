@@ -54,6 +54,30 @@ struct Frame {
     }
 };
 
+/**
+ * @brief 物理约束：a_code * ω + b = 2.09 （其中 a_code 表示 a/ω，即 params[0]）
+ */
+class CostFunctorPhys : public ceres::SizedCostFunction<1, 5> {
+  public:
+    CostFunctorPhys() {}
+    virtual ~CostFunctorPhys() {}
+    virtual bool Evaluate(double const *const *parameters, double *residuals, double **jacobians) const {
+        double A = parameters[0][0];
+        double w = parameters[0][1];
+        double b = parameters[0][3];
+        residuals[0] = A * w + b - 2.09;
+        if (jacobians != nullptr && jacobians[0] != nullptr) {
+            // derivative wrt A, w, t0, b, c
+            jacobians[0][0] = w;   // d(A*w)/dA = w
+            jacobians[0][1] = A;   // d(A*w)/dw = A
+            jacobians[0][2] = 0.0; // t0
+            jacobians[0][3] = 1.0; // b
+            jacobians[0][4] = 0.0; // c
+        }
+        return true;
+    }
+};
+
 class BuffCalculator {
     public:
         Frame buff_frame;

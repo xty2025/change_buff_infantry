@@ -89,17 +89,17 @@ ControlResult Controller::control(const ParsedSerialData& parsedData)
     }
     if(parsedData.actual_bullet_speed > min_bullet_speed)
     {
-    INFO("parsedData.actual_bullet_speed:{}",parsedData.actual_bullet_speed);
-    //弹速的解算：
-    
-    if(bullet_speed == 0)
-    {
-        bullet_speed = parsedData.actual_bullet_speed;
-    }
-
-    else
-    {
-        bullet_speed = parsedData.actual_bullet_speed * bullet_speed_alpha + (1 - bullet_speed_alpha) * bullet_speed;
+        INFO("parsedData.actual_bullet_speed:{}",parsedData.actual_bullet_speed);
+        //弹速的解算：
+        
+        if(bullet_speed == 0)
+        {
+            bullet_speed = parsedData.actual_bullet_speed;
+        }
+        else
+        {
+            bullet_speed = parsedData.actual_bullet_speed * bullet_speed_alpha + (1 - bullet_speed_alpha) * bullet_speed;
+        }
     }
 
     bool aim_center_request = parsedData.aim_request == 3;
@@ -174,15 +174,16 @@ ControlResult Controller::control(const ParsedSerialData& parsedData)
     //重新查找当前目标在预测中的位置，目标丢失直接返回。
     //calc new flytime。
     double distance = sqrt(it->center.x * it->center.x + it->center.y * it->center.y);
+    
     if (distance > 0.0)
     {
         flyTime = std::chrono::duration<double>(distance / bullet_speed);//粗略计算
         predictions_for_time = predictFunc(Time::TimeStamp::now() + flyTime);
-    }
-    /*
-    it = std::find_if(predictions_for_time.begin(), predictions_for_time.end(),
+    
+        it = std::find_if(predictions_for_time.begin(), predictions_for_time.end(),
         [&](const auto& prediction) { return prediction.id == aim_armor_id.first; });
-    */
+    }
+
     if (it == predictions_for_time.end())
     {
         WARN("New car id invalid after flytime update");
@@ -359,8 +360,6 @@ ControlResult Controller::control(const ParsedSerialData& parsedData)
         result.shoot_flag = false;
     INFO("flyTime:{}",flyTime.count());
     return result;
-    }
-
 
     //xty:
     //防止无返回值。

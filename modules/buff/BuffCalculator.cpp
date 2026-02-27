@@ -151,6 +151,8 @@ void BuffCalculator::angleCal() {
     // 用这个角度除以两片扇叶的夹角，得到装甲板切换数，并计算总的装甲板切换数
     int shift = std::round(angleMinus / ANGLE_BETWEEN_FAN_BLADES);
     m_totalShift += shift;
+
+    //xty::
     // 用 angelAbs 减去装甲板切换的角度，即可得到连续的角度
     m_angleRel = angleAbs - m_totalShift * ANGLE_BETWEEN_FAN_BLADES;
     std::cout<<"m_angleRel: "<<m_angleRel<<", "<<"m_totalShift: "<<m_totalShift<<std::endl;
@@ -464,7 +466,12 @@ std::array<double, 5> ransacFitting(const std::vector<std::pair<double, double>>
     // 迭代次数
     int iterTimes{data.size() < 400 ? 200 : 20};
     // 初始参数
-    std::array<double, 5> params{0.9125, 1.942, 0, 1.178, 0};
+
+
+    //xty::a/w应设为0.47？
+    //std::array<double, 5> params{0.9125, 1.942, 0, 1.178, 0};
+    std::array<double, 5> params{0.469, 1.942, 0, 1.177, 0};
+    
     for (int i = 0; i < iterTimes; ++i) {
         decltype(inliers) sample;
         // 如果数据点较多，则将数据打乱，取其中一部分
@@ -551,6 +558,20 @@ std::array<double, 5> leastSquareEstimate(const std::vector<std::pair<double, do
     ceres::LossFunction *lossFunction3 =
         new ceres::ScaledLoss(new ceres::HuberLoss(0.1), omega[2], ceres::TAKE_OWNERSHIP);
     problem.AddResidualBlock(costFunction3, lossFunction3, ret.begin());
+
+    //xty::
+    // 参数边界（使用 a_code = a/ω 语义）
+    problem.SetParameterLowerBound(ret.begin(), 0, 0.39);   // a/ω 下界
+    problem.SetParameterUpperBound(ret.begin(), 0, 0.555);  // a/ω 上界
+    problem.SetParameterLowerBound(ret.begin(), 1, 1.884);  // ω 下界
+    problem.SetParameterUpperBound(ret.begin(), 1, 2.000);  // ω 上界
+    problem.SetParameterLowerBound(ret.begin(), 3, 1.045);  // b 下界
+    problem.SetParameterUpperBound(ret.begin(), 3, 1.31);   // b 上界
+    
+    // 增加物理约束残差：A * ω + b = 2.09，其中 A 表示 a/ω
+    ceres::CostFunction* physCost = new CostFunctorPhys();
+    ceres::LossFunction* physLoss = new ceres::ScaledLoss(new ceres::HuberLoss(0.1), 1000.0, ceres::TAKE_OWNERSHIP);
+    problem.AddResidualBlock(physCost, physLoss, ret.begin());
     ceres::Solver::Options options;
     options.linear_solver_type = ceres::DENSE_QR;
     options.max_num_iterations = 50;
