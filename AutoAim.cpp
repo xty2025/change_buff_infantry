@@ -510,12 +510,25 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
 
                 int selected_idx = 0;
                 if (detected_buff_cnt == 1) {
-                    // 1个目标：保持原单目标逻辑，不做双目标切换
+                    bool previously_dual = buff_dual_target_active->load();
+                    bool previously_switched = buff_switch_to_second->load();
+                    
+                    // 如果之前是在双目标模式且已经切换到了第二个，
+                    // 即使现在只剩一个，如果它刚好是我们正在打的那个（原来的第二个），
+                    // 我们需要确保逻辑的一致性，或者在目标消失时重置。
+                    // 这里的逻辑：如果只剩一个，优先认为它是剩下的那个。
                     selected_idx = 0;
+                    
+                    // 如果单帧只剩一个，通常意味着其中一个被击打熄灭或遮挡
+                    // 重置双目标标志，回到单目标逻辑
+                    if (previously_dual && previously_switched) {
+                        std::cout << "[BUFF] Dual mode finished, continuing with last armor" << std::endl;
+                    }
+
                     buff_two_target_cycle = false;
                     buff_dual_target_active->store(false);
                     buff_switch_to_second->store(false);
-                    buff_prev_shoot_cmd->store(false);
+                    // buff_prev_shoot_cmd 不重置，保持连贯性
                 } else {
                     auto now_tp = std::chrono::steady_clock::now();
                     if (!buff_two_target_cycle) {
@@ -564,6 +577,15 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
                     *buff_pitch = buff_calculator.get_predictPitch();
                     *buff_yaw = buff_calculator.get_predictYaw();
                     buff_success = true;
+
+                    //xty::visionalize buff_calculator result;
+
+                    // 可视化预测点
+                    if (draw_overlay) {
+                        cv::Point2f predictPixel = buff_calculator.getPredictPixel();
+                        cv::circle(frame->image, predictPixel, 6, cv::Scalar(0, 0, 255), -1); // Red circle for target center
+                        cv::putText(frame->image, "Target Center", predictPixel + cv::Point2f(10, 10), cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 255), 2);
+                    }
                 }            
                 
             }

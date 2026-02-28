@@ -73,7 +73,6 @@ bool BuffDetector::buffDetect(const cv::Mat& frame, int enemy_color) {
     return true;
     //enemy_color=param::Param param()[config.json.enemy_color];
 }
-//void enemy_color=param::
 
 void BuffDetector::drawTargetPoint(const cv::Point2f& point) {
     cv::circle(m_imageShow, point, 4, cv::Scalar (0, 205, 0), 6);
@@ -85,57 +84,59 @@ void BuffDetector::drawTargetPoint(const cv::Point2f& point) {
 
 
 void BuffDetector::drawDebugOverlay(cv::Mat& image, bool print_coords) const {
-    if (!m_has_valid_armor || image.empty()) {
+    if (image.empty()) {
         return;
     }
 
     if (m_has_raw_detect) {
-        draw_boxes_keypoints(image, m_last_boxes, m_last_confidence, m_last_class_ids, m_last_keypoints);
+        for (size_t i = 0; i < m_last_boxes.size(); ++i) {
+            const cv::Rect& box = m_last_boxes[i];
+            float score = m_last_confidences[i];
+            cv::Scalar color(0, 255, 0); // Green for detection
+
+            // Draw bounding box
+            cv::rectangle(image, box, color, 2);
+            std::string label = "fan " + std::to_string(score).substr(0, 4);
+            cv::putText(image, label, box.tl() + cv::Point(0, -10), cv::FONT_HERSHEY_SIMPLEX, 0.5, color, 2);
+
+            // Draw and connect keypoints for each armor
+            if (i < m_armors.size()) {
+                const auto& a = m_armors[i];
+                std::array<cv::Point2f, 6> pts = {a.m_0p, a.m_1p, a.m_2p, a.m_3p, a.m_4p, a.m_5p};
+                std::array<std::string, 6> names = {"R", "C", "U", "Rgt", "D", "L"};
+                
+                // Draw lines connecting keypoints (Fan shape and R-C line)
+                // C to 4 outer points
+                cv::line(image, pts[1], pts[2], cv::Scalar(255, 255, 0), 1);
+                cv::line(image, pts[1], pts[3], cv::Scalar(255, 255, 0), 1);
+                cv::line(image, pts[1], pts[4], cv::Scalar(255, 255, 0), 1);
+                cv::line(image, pts[1], pts[5], cv::Scalar(255, 255, 0), 1);
+                // Outer points connections
+                cv::line(image, pts[2], pts[3], cv::Scalar(0, 255, 255), 2);
+                cv::line(image, pts[3], pts[4], cv::Scalar(0, 255, 255), 2);
+                cv::line(image, pts[4], pts[5], cv::Scalar(0, 255, 255), 2);
+                cv::line(image, pts[5], pts[2], cv::Scalar(0, 255, 255), 2);
+                // R to C line
+                cv::line(image, pts[0], pts[1], cv::Scalar(255, 0, 255), 2);
+
+                for (size_t j = 0; j < pts.size(); ++j) {
+                    cv::circle(image, pts[j], 4, cv::Scalar(0, 0, 255), -1);
+                    if (print_coords) {
+                        std::ostringstream oss;
+                        oss << names[j] << "(" << std::fixed << std::setprecision(1) << pts[j].x << "," << pts[j].y << ")";
+                        cv::putText(image, oss.str(), pts[j] + cv::Point2f(6.0f, -6.0f), cv::FONT_HERSHEY_SIMPLEX,
+                                    0.35, cv::Scalar(255, 255, 255), 1);
+                    }
+                }
+            }
+        }
     }
 
-    const cv::Rect buff_rect(
-        static_cast<int>(std::round(m_armor.m_box_x)),
-        static_cast<int>(std::round(m_armor.m_box_y)),
-        static_cast<int>(std::round(m_armor.m_box_width)),
-        static_cast<int>(std::round(m_armor.m_box_height))
-    );
-    cv::rectangle(image, buff_rect, cv::Scalar(255, 0, 255), 2);
-    cv::putText(image, "buff", buff_rect.tl() + cv::Point(0, -8), cv::FONT_HERSHEY_SIMPLEX,
-                0.6, cv::Scalar(255, 0, 255), 2);
-
-    const std::array<std::pair<std::string, cv::Point2f>, 6> named_points = {
-        std::make_pair("R", m_armor.m_0p),
-        std::make_pair("C", m_armor.m_1p),
-        std::make_pair("U", m_armor.m_2p),
-        std::make_pair("Rgt", m_armor.m_3p),
-        std::make_pair("D", m_armor.m_4p),
-        std::make_pair("L", m_armor.m_5p)
-    };
-
-    std::vector<cv::Point> fan_outline = {
-        named_points[2].second,
-        named_points[3].second,
-        named_points[4].second,
-        named_points[5].second
-    };
-    cv::polylines(image, fan_outline, true, cv::Scalar(0, 255, 255), 2);
-    cv::line(image, named_points[1].second, named_points[0].second, cv::Scalar(255, 255, 0), 2);
-
-    for (const auto& [name, pt] : named_points) {
-        cv::circle(image, pt, 4, cv::Scalar(0, 0, 255), -1);
-        std::ostringstream oss;
-        oss << name << "(" << std::fixed << std::setprecision(1) << pt.x << "," << pt.y << ")";
-        cv::putText(image, oss.str(), pt + cv::Point2f(6.0f, -6.0f), cv::FONT_HERSHEY_SIMPLEX,
-                    0.45, cv::Scalar(255, 255, 255), 1);
-    }
-
-    if (print_coords) {
-        std::cout << "[BUFF][BOX] x=" << m_armor.m_box_x
-                  << ", y=" << m_armor.m_box_y
-                  << ", w=" << m_armor.m_box_width
-                  << ", h=" << m_armor.m_box_height << std::endl;
-        for (const auto& [name, pt] : named_points) {
-            std::cout << "[BUFF][KP][" << name << "] x=" << pt.x << ", y=" << pt.y << std::endl;
+    if (print_coords && m_has_valid_armor) {
+        std::cout << "[BUFF] Detected counts: " << m_armors.size() << std::endl;
+        for (size_t i = 0; i < m_armors.size(); ++i) {
+            const auto& a = m_armors[i];
+            std::cout << "[BUFF][" << i << "][BOX] x=" << a.m_box_x << ", y=" << a.m_box_y << std::endl;
         }
     }
 }

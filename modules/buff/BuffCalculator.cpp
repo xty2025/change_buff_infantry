@@ -568,10 +568,13 @@ std::array<double, 5> leastSquareEstimate(const std::vector<std::pair<double, do
     problem.SetParameterLowerBound(ret.begin(), 3, 1.045);  // b 下界
     problem.SetParameterUpperBound(ret.begin(), 3, 1.31);   // b 上界
     
+
+    //xty::
     // 增加物理约束残差：A * ω + b = 2.09，其中 A 表示 a/ω
     ceres::CostFunction* physCost = new CostFunctorPhys();
     ceres::LossFunction* physLoss = new ceres::ScaledLoss(new ceres::HuberLoss(0.1), 1000.0, ceres::TAKE_OWNERSHIP);
     problem.AddResidualBlock(physCost, physLoss, ret.begin());
+
     ceres::Solver::Options options;
     options.linear_solver_type = ceres::DENSE_QR;
     options.max_num_iterations = 50;
