@@ -48,6 +48,51 @@ void Controller::readJsonParam()
     pic_camera_y = json_param["pic_camera_y"].Double();
     response_speed = json_param["response_speed"].Double();
     shootDelay = std::chrono::duration<double>(json_param["shoot_delay"].Double());
+
+    if (json_param.exists("shoot_table_adjust")) {
+        shoot_table_adjust = json_param["shoot_table_adjust"]["enable"].Bool();
+        if (shoot_table_adjust) {
+            pitch_param[0] = json_param["shoot_table_adjust"]["pitch"]["intercept"].Double();
+            pitch_param[1] = json_param["shoot_table_adjust"]["pitch"]["coef_z"].Double();
+            pitch_param[2] = json_param["shoot_table_adjust"]["pitch"]["coef_d"].Double();
+            pitch_param[3] = json_param["shoot_table_adjust"]["pitch"]["coef_z2"].Double();
+            pitch_param[4] = json_param["shoot_table_adjust"]["pitch"]["coef_zd"].Double();
+            pitch_param[5] = json_param["shoot_table_adjust"]["pitch"]["coef_d2"].Double();
+
+            yaw_param[0] = json_param["shoot_table_adjust"]["yaw"]["intercept"].Double();
+            yaw_param[1] = json_param["shoot_table_adjust"]["yaw"]["coef_z"].Double();
+            yaw_param[2] = json_param["shoot_table_adjust"]["yaw"]["coef_d"].Double();
+            yaw_param[3] = json_param["shoot_table_adjust"]["yaw"]["coef_z2"].Double();
+            yaw_param[4] = json_param["shoot_table_adjust"]["yaw"]["coef_zd"].Double();
+            yaw_param[5] = json_param["shoot_table_adjust"]["yaw"]["coef_d2"].Double();
+        }
+    }
+
+    // 可选：常规装甲板 pitch 补偿参数
+    if (json_param.exists("pitch_offset_enable")) {
+        pitch_offset_enable = json_param["pitch_offset_enable"].Bool();
+    }
+    if (json_param.exists("pitch_offset_deg")) {
+        pitch_offset_deg = json_param["pitch_offset_deg"].Double();
+    }
+    if (json_param.exists("pitch_offset_per_meter")) {
+        pitch_offset_per_meter = json_param["pitch_offset_per_meter"].Double();
+    }
+    if (json_param.exists("pitch_offset_ref_distance")) {
+        pitch_offset_ref_distance = json_param["pitch_offset_ref_distance"].Double();
+    }
+
+    INFO("controller pitch offset: enable={}, base={}deg, k={}deg/m, ref={}m",
+         pitch_offset_enable, pitch_offset_deg, pitch_offset_per_meter, pitch_offset_ref_distance);
+    INFO("controller shoot table adjust: {}", shoot_table_adjust);
+    if (shoot_table_adjust) {
+        INFO("controller shoot table pitch coeff(deg): [{}, {}, {}, {}, {}, {}]",
+             pitch_param[0], pitch_param[1], pitch_param[2],
+             pitch_param[3], pitch_param[4], pitch_param[5]);
+        INFO("controller shoot table yaw coeff(deg): [{}, {}, {}, {}, {}, {}]",
+             yaw_param[0], yaw_param[1], yaw_param[2],
+             yaw_param[3], yaw_param[4], yaw_param[5]);
+    }
 }
 
 static bool thetaInRange(double theta_deg, double range_deg)
@@ -273,7 +318,8 @@ ControlResult Controller::control(const ParsedSerialData& parsedData)
             WARN("calcPitchYaw failed");
             return result;
         }
-        result.pitch_setpoint = pitch * 180 / PI;
+        const double target_distance_m = std::hypot(it->center.x, it->center.y);
+        result.pitch_setpoint = pitch * 180 / PI + getPitchOffsetDeg(target_distance_m);
         result.yaw_setpoint = yaw * 180 / PI;
         result.yaw_setpoint = parsedData.yaw_now + std::remainder(result.yaw_setpoint - parsedData.yaw_now, 360.0);
         result.pitch_actual_want = result.pitch_setpoint;
@@ -306,7 +352,9 @@ ControlResult Controller::control(const ParsedSerialData& parsedData)
                 }
             }
             //判断是否是可以射击的标志
-            double delta_yaw = std::remainder(pitch - parsedData.pitch_now * M_PI / 180 ,2 * M_PI);
+            const double target_distance_m = std::hypot(it->armors[i].center.x, it->armors[i].center.y);
+            const double pitch_with_offset = pitch + getPitchOffsetDeg(target_distance_m) * M_PI / 180.0;
+            double delta_yaw = std::remainder(pitch_with_offset - parsedData.pitch_now * M_PI / 180 ,2 * M_PI);
             double delta_pitch = std::remainder(yaw - parsedData.yaw_now * M_PI / 180 ,2 * M_PI);
             double dist = it->armors[i].center.dist();
             if(std::tan(delta_yaw)*dist<tol_deltax && std::tan(delta_pitch)*dist<tol_deltay)
@@ -344,12 +392,13 @@ ControlResult Controller::control(const ParsedSerialData& parsedData)
         WARN("calcPitchYaw failed");
         return result;
     }
-    result.pitch_setpoint = pitch * 180 / PI;
+    const double target_distance_m = std::hypot(armor_it->center.x, armor_it->center.y);
+    result.pitch_setpoint = pitch * 180 / PI + getPitchOffsetDeg(target_distance_m);
     result.yaw_setpoint = yaw * 180 / PI;
     result.yaw_setpoint = parsedData.yaw_now + std::remainder(result.yaw_setpoint - parsedData.yaw_now, 360.0);
     result.valid = true;
 
-    double delta_yaw = std::remainder(pitch - parsedData.pitch_now * M_PI / 180 ,2 * M_PI);
+    double delta_yaw = std::remainder(result.pitch_setpoint * M_PI / 180.0 - parsedData.pitch_now * M_PI / 180 ,2 * M_PI);
     double delta_pitch = std::remainder(yaw - parsedData.yaw_now * M_PI / 180 ,2 * M_PI);
     double dist = armor_it->center.dist();
     if(std::tan(delta_yaw)*dist<tol_deltax && std::tan(delta_pitch)*dist<tol_deltay)
@@ -417,6 +466,45 @@ bool Controller::calcPitchYaw(double& pitch, double& yaw, double& time, double t
     {
         pitch = theta;
         yaw = atan2(target_y, target_x);
+        if (shoot_table_adjust) {
+            const double horizontal_distance = std::hypot(target_x, target_y);
+            pitch += fitPitchRad(target_z, horizontal_distance);
+            yaw += fitYawRad(target_z, horizontal_distance);
+        }
         return true;
     }
 } // namespace controller
+
+double Controller::fitPitchRad(double z_height, double horizontal_distance) const
+{
+    if (!shoot_table_adjust) {
+        return 0.0;
+    }
+    return fitPolynomialDeg(pitch_param, z_height, horizontal_distance) * PI / 180.0;
+}
+
+double Controller::fitYawRad(double z_height, double horizontal_distance) const
+{
+    if (!shoot_table_adjust) {
+        return 0.0;
+    }
+    return fitPolynomialDeg(yaw_param, z_height, horizontal_distance) * PI / 180.0;
+}
+
+double Controller::fitPolynomialDeg(const std::vector<double>& param, double z_height, double horizontal_distance) const
+{
+    if (param.size() < 6) {
+        return 0.0;
+    }
+
+    const double z2 = z_height * z_height;
+    const double d2 = horizontal_distance * horizontal_distance;
+    const double zd = z_height * horizontal_distance;
+
+    return param[0] +
+           param[1] * z_height +
+           param[2] * horizontal_distance +
+           param[3] * z2 +
+           param[4] * zd +
+           param[5] * d2;
+}

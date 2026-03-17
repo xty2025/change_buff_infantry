@@ -20,6 +20,10 @@
             "response_speed": 0.01,
             "pic_camera_x": 640.0,
             "pic_camera_y": 512.0,
+            "pitch_offset_enable": false,
+            "pitch_offset_deg": 0.0,
+            "pitch_offset_per_meter": 0.0,
+            "pitch_offset_ref_distance": 5.0,
             "mouse_require": true
         },
         "solver":

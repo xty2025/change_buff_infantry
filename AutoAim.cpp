@@ -103,6 +103,9 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
     auto buff_dual_target_active = std::make_shared<std::atomic<bool>>(false);
     auto buff_switch_to_second = std::make_shared<std::atomic<bool>>(false);
     auto buff_prev_shoot_cmd = std::make_shared<std::atomic<bool>>(false);
+    auto buff_last_shoot_flag = std::make_shared<std::atomic<int>>(0);
+    auto buff_selected_idx_shared = std::make_shared<std::atomic<int>>(-1);
+    auto buff_detect_cnt_shared = std::make_shared<std::atomic<int>>(0);
     // 新增共享变量
 // 新增共享变量，用于在不同线程间传递大能量机关的瞄准角度
     std::shared_ptr<float> buff_pitch = std::make_shared<float>(0.0);
@@ -139,7 +142,7 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
     //driver->registeReadCallback(std::function<void(const ParsedSerialData&)>callback);
     driver->registReadCallback(
     [control_func = driver->sendSerialFunc() ,controller, &buff_success, buff_controller, &hitBuff, buff_pitch, buff_yaw, shoot_enable,force_shoot,record_enable,
-     buff_dual_target_active, buff_switch_to_second, buff_prev_shoot_cmd]
+        buff_dual_target_active, buff_switch_to_second, buff_prev_shoot_cmd, buff_last_shoot_flag]
     (const ParsedSerialData& parsedData)
     {
     //lambda:[捕获列表](捕获参数)->返回对象(函数体)
@@ -158,6 +161,10 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
             // 如果强制射击，则设置射击标志
             result.shoot_flag = shoot_enable? result.shoot_flag : 0;
 
+            INFO("[solve] normal pitch_setpoint={}, yaw_setpoint={}, pitch_now={}, yaw_now={}, shoot_flag={}",
+                 result.pitch_setpoint, result.yaw_setpoint, parsedData.pitch_now, parsedData.yaw_now, result.shoot_flag);
+              buff_last_shoot_flag->store(result.shoot_flag);
+
             // 根据配置决定是否允许射击
             control_func(result);
             std::cout<<"7777"<<std::endl;//打车
@@ -165,7 +172,7 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
         else //buff
         {
             // 调用大能量机关控制器计算控制结果
-            std::cout<<"8888888888888"<<std::endl;
+            std::cout<<"8888"<<std::endl;
             BuffControlResult buff_result = buff_controller.buff_control(parsedData, buff_pitch, buff_yaw);
             if(force_shoot) buff_result.shoot_flag = 1;
             buff_result.shoot_flag = shoot_enable? buff_result.shoot_flag : 0;
@@ -183,10 +190,23 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
             result.yaw_setpoint = buff_result.yaw_setpoint;
             result.pitch_actual_want = buff_result.pitch_actual_want;
             result.yaw_actual_want = buff_result.yaw_actual_want;
-            std::cout<<"flag:"<<result.shoot_flag<<", pitch_setpoint:"<<result.pitch_setpoint<<", yaw_setpoint:"<<
-                result.yaw_setpoint<<", pitch_actual_want:"<<result.pitch_actual_want<<", yaw_actual_want:"<<result.yaw_actual_want<<std::endl;
+
+            //xty::
+              float pitch_err = result.pitch_setpoint - parsedData.pitch_now;
+              float yaw_err = std::remainder(result.yaw_setpoint - parsedData.yaw_now, 360.0f);
+            INFO("[solve] buff pitch_setpoint={}, yaw_setpoint={}, pitch_actual_want={}, yaw_actual_want={}, pitch_now={}, yaw_now={}, shoot_flag={}",
+                 result.pitch_setpoint, result.yaw_setpoint, result.pitch_actual_want, result.yaw_actual_want,
+                 parsedData.pitch_now, parsedData.yaw_now, result.shoot_flag);
+              INFO("[buff_debug] err_pitch={}, err_yaw={}, available_shoot_number={}, shoot_enable={}",
+                  pitch_err, yaw_err, static_cast<int>(parsedData.available_shoot_number), static_cast<int>(shoot_enable));
+              if (result.shoot_flag && parsedData.available_shoot_number == 0) {
+                 WARN("[buff_debug] shoot_flag=1 but available_shoot_number=0, lower controller may block shooting");
+              }
+           
+              
             result.valid = true;
             control_func(result);
+            buff_last_shoot_flag->store(result.shoot_flag);
         }
         //xjj
                 UdpSend::sendData((float)result.pitch_setpoint);
@@ -262,9 +282,13 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
         }
         else{hitBuff = false; buff_mode = 0;}
         //TODO debug
-        // hitBuff = true ;//imu.aim_request == 2;
-        // std::cout<<"set ture"<<std::endl;
-        // buff_mode = 1; //1小符2大符
+        
+        hitBuff = true ;//
+        imu.aim_request == 2;
+        std::cout<<"set ture"<<std::endl;
+        buff_mode = 1; //1小符2大符
+
+        
         //TODO
         //xjj
         if (!EfficiencyFirst || !hitBuff)//性能优先时不进行装甲板检测   !EfficiencyFirst || !hitBuff
@@ -424,8 +448,8 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
                     armor_center.z = 0;
                     temp.xyz_imu = armor_center;
                     CXYD armor_coord_z0 = temp.cxy;
-                    cv::line(frame->image, cv::Point(armor_coord.cx, armor_coord.cy),
-                             cv::Point(armor_coord_z0.cx, armor_coord_z0.cy), cv::Scalar(255, 255, 0), 2);
+                        // cv::line(frame->image, cv::Point(armor_coord.cx, armor_coord.cy),
+                        //          cv::Point(armor_coord_z0.cx, armor_coord_z0.cy), cv::Scalar(255, 255, 0), 2);
                     std::string text = std::to_string(armor.yaw - temp.imu.yaw);
                                         cv::putText(frame->image, text, cv::Point(armor_coord.cx, armor_coord.cy), cv::FONT_HERSHEY_SIMPLEX,
                                 0.5, cv::Scalar(0, 255, 255), 2);
@@ -476,6 +500,8 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
             if (buff_detector.buffDetect(frame->image, enemy_color) == false) {
                 std::cout<<"detectfail"<<std::endl;
                 buff_success = false;
+                buff_detect_cnt_shared->store(0);
+                buff_selected_idx_shared->store(-1);
 
                 //xty::
 
@@ -483,6 +509,8 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
 
                 if (draw_overlay) {
                     buff_detector.drawDebugOverlay(frame->image, true);
+                    cv::putText(frame->image, "BUFF detect FAIL", cv::Point(20, 35),
+                                cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0, 0, 255), 2);
                 }
             }
             else{
@@ -496,16 +524,29 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
                     buff_detector.drawDebugOverlay(frame->image, true);
                 }
                 int detected_buff_cnt = buff_detector.getDetectedArmorCount();
+                buff_detect_cnt_shared->store(detected_buff_cnt);
                 if (detected_buff_cnt <= 0) {
                     //xty::更改此处逻辑，不加哨兵的大偏角。
                     *buff_pitch = imu.pitch_now ;
                     *buff_yaw = imu.yaw_now ;
                     buff_success = false;
+                    buff_selected_idx_shared->store(-1);
                     buff_two_target_cycle = false;
                     buff_dual_target_active->store(false);
                     buff_switch_to_second->store(false);
                     buff_prev_shoot_cmd->store(false);
+                    if (draw_overlay) {
+                        cv::putText(frame->image, "BUFF no armor", cv::Point(20, 70),
+                                    cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0, 0, 255), 2);
+                    }
                     continue;
+                }
+
+                if (draw_overlay) {
+                    cv::putText(frame->image,
+                                "BUFF mode=" + std::to_string(buff_mode) + " det=" + std::to_string(detected_buff_cnt),
+                                cv::Point(20, 35), cv::FONT_HERSHEY_SIMPLEX, 0.8,
+                                cv::Scalar(0, 255, 255), 2);
                 }
 
                 int selected_idx = 0;
@@ -552,6 +593,18 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
                     selected_idx = buff_switch_to_second->load() ? buff_secondary_idx : buff_primary_idx;
                 }
 
+                buff_selected_idx_shared->store(selected_idx);
+
+                if (draw_overlay) {
+                    cv::putText(frame->image,
+                                "BUFF sel=" + std::to_string(selected_idx)
+                                + " dual=" + std::to_string(static_cast<int>(buff_dual_target_active->load()))
+                                + " sw2=" + std::to_string(static_cast<int>(buff_switch_to_second->load()))
+                                + " shoot=" + std::to_string(buff_last_shoot_flag->load()),
+                                cv::Point(20, 105), cv::FONT_HERSHEY_SIMPLEX, 0.72,
+                                cv::Scalar(255, 255, 0), 2);
+                }
+
                 auto buffCameraPoints{buff_detector.getCameraPointsByIndex(static_cast<std::size_t>(selected_idx))}; //R标+裝甲板5點
                 if (buffCameraPoints.size() != 6) {
                     *buff_pitch = imu.pitch_now + 90.0;
@@ -559,17 +612,39 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
                     buff_success = false;
                     continue;
                 }
+
+                if (draw_overlay) {
+                    // 高亮当前被选中的待击打目标（C点与R-C方向）
+                    const cv::Point2f r_pt = buffCameraPoints[0];
+                    const cv::Point2f c_pt = buffCameraPoints[1];
+                    cv::circle(frame->image, c_pt, 10, cv::Scalar(0, 0, 255), 2);
+                    cv::circle(frame->image, r_pt, 7, cv::Scalar(255, 0, 255), 2);
+                    cv::line(frame->image, r_pt, c_pt, cv::Scalar(255, 0, 255), 2);
+                    cv::putText(frame->image, "BUFF selected target", c_pt + cv::Point2f(10, -10),
+                                cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 255), 2);
+                }
                 // buff_calculator
                 //这里应該要整入time了
                 //buff+time predict。
                 buff_calculator.buff_frame.set(frame->image, std::chrono::steady_clock::now(), imu.pitch_now, imu.yaw_now, imu.roll_now); //pitch, yaw, roll
                 std::cout<<"imu.actual_bullet_speed:"<<imu.actual_bullet_speed<<std::endl;
-                bool buffResult = buff_calculator.calculate(buff_calculator.buff_frame, buffCameraPoints, buff_mode, imu.actual_bullet_speed > 20.0 ? imu.actual_bullet_speed*100 : 24.0 * 100 , reload_big_buff); 
+                // actual_bullet_speed is already in m/s in the serial protocol and controller path.
+                // Multiplying by 100 here suppresses gravity compensation and makes buff pitch systematically low.
+                bool buffResult = buff_calculator.calculate(
+                    buff_calculator.buff_frame,
+                    buffCameraPoints,
+                    buff_mode,
+                    imu.actual_bullet_speed > 20.0f ? imu.actual_bullet_speed : 24.0f,
+                    reload_big_buff); 
                 if (!buffResult) {
                     std::cout<<"buff_calculator fail"<<std::endl;
                     *buff_pitch = imu.pitch_now + 90.0;
                     *buff_yaw = imu.yaw_now + 90.0;
                     buff_success = false;
+                    if (draw_overlay) {
+                        cv::putText(frame->image, "BUFF calc FAIL", cv::Point(20, 70),
+                                    cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0, 0, 255), 2);
+                    }
                 }
                 else{
                     std::cout<<"完成了buff_calculator"<<std::endl;
@@ -578,12 +653,28 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
                     *buff_yaw = buff_calculator.get_predictYaw();
                     buff_success = true;
 
+                    if (draw_overlay) {
+                        cv::putText(frame->image,
+                                    "BUFF calc OK pitch=" + std::to_string(*buff_pitch).substr(0, 6)
+                                    + " yaw=" + std::to_string(*buff_yaw).substr(0, 6),
+                                    cv::Point(20, 70), cv::FONT_HERSHEY_SIMPLEX, 0.75,
+                                    cv::Scalar(0, 255, 0), 2);
+                    }
+
                     //xty::visionalize buff_calculator result;
 
                     // 可视化预测点
                     if (draw_overlay) {
                         cv::Point2f predictPixel = buff_calculator.getPredictPixel();
-                        cv::circle(frame->image, predictPixel, 6, cv::Scalar(0, 0, 255), -1); // Red circle for target center
+                        const int cross_half = 8;
+                        cv::line(frame->image,
+                                 cv::Point2f(predictPixel.x - cross_half, predictPixel.y - cross_half),
+                                 cv::Point2f(predictPixel.x + cross_half, predictPixel.y + cross_half),
+                                 cv::Scalar(0, 0, 255), 2);
+                        cv::line(frame->image,
+                                 cv::Point2f(predictPixel.x - cross_half, predictPixel.y + cross_half),
+                                 cv::Point2f(predictPixel.x + cross_half, predictPixel.y - cross_half),
+                                 cv::Scalar(0, 0, 255), 2);
                         cv::putText(frame->image, "Target Center", predictPixel + cv::Point2f(10, 10), cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 255), 2);
                     }
                 }            
@@ -595,7 +686,15 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
         //if(udp_enable)
          //   UdpSend::sendTail();
         if(web_debug_enable)
-            VideoStreamer::setFrame(frame->image);
+        VideoStreamer::setFrame(frame->image);
+
+        //xty::压小一点。
+        // if(web_debug_enable) {
+        //     cv::Mat small_img;
+        //     cv::resize(frame->image, small_img, cv::Size(640, 480)); // 降采样传输
+        //     VideoStreamer::setFrame(small_img);
+        // }
+
         if(record_enable)
         {
             INFO("ADD FRAME");

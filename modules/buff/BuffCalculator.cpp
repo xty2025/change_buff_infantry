@@ -468,7 +468,8 @@ std::array<double, 5> ransacFitting(const std::vector<std::pair<double, double>>
     // 初始参数
 
 
-    //xty::a/w应设为0.47？
+    //xty::
+    //a/w应设为0.47？
     //std::array<double, 5> params{0.9125, 1.942, 0, 1.178, 0};
     std::array<double, 5> params{0.469, 1.942, 0, 1.177, 0};
     

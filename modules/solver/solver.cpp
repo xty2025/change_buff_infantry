@@ -114,7 +114,12 @@ std::pair<XYZ,double> Solver::camera2world(const ArmorXYV& trackResult, const Im
     cv::Mat cameraMatrix, distCoeffs;
     cv::eigen2cv(cameraIntrinsicMatrix, cameraMatrix);
     cv::eigen2cv(distorationCoefficients, distCoeffs);
-    auto imu_roll = imuData_deg.roll * M_PI / 180, imu_pitch = imuData_deg.pitch * M_PI / 180, imu_yaw = imuData_deg.yaw * M_PI / 180;
+    // auto imu_roll = imuData_deg.roll * M_PI / 180, imu_pitch = imuData_deg.pitch * M_PI / 180, imu_yaw = imuData_deg.yaw * M_PI / 180;
+
+
+    //xty::
+    const PYD imu_rad = static_cast<PYD>(imuData_deg);
+    const double imu_yaw = imu_rad.yaw;
     
     if (trackResult.size() != 4) 
         return std::make_pair(XYZ(), 0.0);
@@ -178,7 +183,11 @@ std::pair<XYZ,double> Solver::camera2world(const ArmorXYV& trackResult, const Im
 
     //把opencv的坐标系转换成我们的世界坐标系。
     XYZ camera(tvec.at<double>(2), -tvec.at<double>(0), -tvec.at<double>(1));
-    XYZ result = camera2world(camera, imuData_deg);
+    // XYZ result = camera2world(camera, imuData_deg);
+
+
+    //xty::
+    XYZ result = camera2world(camera, imu_rad);
     //pyd.distance = 1;
 
     //pyd.distance = calcDistance(imagePoints, pyd.yaw, pyd.pitch);
@@ -195,7 +204,12 @@ std::pair<XYZ,double> Solver::camera2worldWithWholeCar(const ArmorXYV& trackResu
     cv::Mat cameraMatrix, distCoeffs;
     cv::eigen2cv(cameraIntrinsicMatrix, cameraMatrix);
     cv::eigen2cv(distorationCoefficients, distCoeffs);
-    auto imu_roll = imuData_deg.roll * M_PI / 180, imu_pitch = imuData_deg.pitch * M_PI / 180, imu_yaw = imuData_deg.yaw * M_PI / 180;
+    // auto imu_roll = imuData_deg.roll * M_PI / 180, imu_pitch = imuData_deg.pitch * M_PI / 180, imu_yaw = imuData_deg.yaw * M_PI / 180;
+
+
+    //xty::
+    const PYD imu_rad = static_cast<PYD>(imuData_deg);
+    const double imu_yaw = imu_rad.yaw;
     
     if (trackResult.size() != 4)
         return std::make_pair(XYZ(), 0.0);
@@ -278,7 +292,11 @@ std::pair<XYZ,double> Solver::camera2worldWithWholeCar(const ArmorXYV& trackResu
     XYZ camera(tvec.at<double>(2), -tvec.at<double>(0), -tvec.at<double>(1));
     INFO("before transform: x:{},y:{},z:{}",camera.x,camera.y,camera.z);
     // 调用另一个重载的camera2world函数将相机坐标转换为世界坐标
-    XYZ result = camera2world(camera, imuData_deg);
+    // XYZ result = camera2world(camera, imuData_deg);
+
+
+    //xty::
+    XYZ result = camera2world(camera, imu_rad);
     //pyd.distance = 1;
     
     //pyd.distance = calcDistance(imagePoints, pyd.yaw, pyd.pitch);

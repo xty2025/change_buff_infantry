@@ -39,7 +39,7 @@ if(GXIAPI_LIB)
     message(STATUS "Found GXIAPI_LIB: ${GXIAPI_LIB}")
     target_link_libraries(third_party_libs INTERFACE ${GXIAPI_LIB})
 else()
-    message(FATAL_ERROR "GXIAPI_LIB not found")
+    message(WARNING "GXIAPI_LIB not found; continuing without camera SDK link")
 endif()
 
 
@@ -76,10 +76,13 @@ target_link_libraries(AutoAim PRIVATE third_party_libs modules_libs)
 add_executable(Calib Calib.cpp)
 target_link_libraries(Calib PRIVATE third_party_libs modules_libs)
 
+add_executable(ShootingTableCalibration ShootingTableCalibration.cpp)
+target_link_libraries(ShootingTableCalibration PRIVATE third_party_libs modules_libs)
+
 #add_executable(calib_infantry calib_infantry.cpp)
 #target_link_libraries(calib_infantry PRIVATE third_party_libs modules_libs)
 
-#add_executable(RecordSolveData RecordSolveData.cpp)
-#target_link_libraries(RecordSolveData PRIVATE third_party_libs modules_libs)
+add_executable(RecordSolveData RecordSolveData.cpp)
+target_link_libraries(RecordSolveData PRIVATE third_party_libs modules_libs)
 #add_executable(tempAutoAim tempAutoAim.cpp)
 #target_link_libraries(tempAutoAim PRIVATE third_party_libs modules_libs)

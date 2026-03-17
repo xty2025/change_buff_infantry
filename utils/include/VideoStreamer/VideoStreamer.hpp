@@ -11,7 +11,7 @@
 class VideoStreamer {
 private:
     inline static int port_ = 8081;
-    inline static std::string local_ip_ = "127.0.0.1";
+    inline static std::string local_ip_ = "0.0.0.0";
     inline static int jpeg_quality_ = 50;
     //作用：JPEG 编码质量（0-100），用在 setFrame() 的 cv::imencode 中。
     //质量越高，图像越清晰但数据更大；影响带宽和延迟。
@@ -28,6 +28,32 @@ private:
 private:
     // 服务器启动函数，供线程调用
     static void startServer() {
+                server_->Get("/", [](const httplib::Request& req, httplib::Response& res) {
+                        (void)req;
+                        const char* html = R"HTML(
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>AutoAim Stream</title>
+    <style>
+        html,body{margin:0;background:#111;color:#eee;font-family:sans-serif}
+        .wrap{display:flex;flex-direction:column;align-items:center;gap:10px;padding:10px}
+        img{max-width:100vw;max-height:92vh;object-fit:contain;background:#000}
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <div>AutoAim Live Stream</div>
+        <img src="/stream" alt="stream" />
+    </div>
+</body>
+</html>
+)HTML";
+                        res.set_content(html, "text/html; charset=UTF-8");
+                });
+
         // 设置视频流接口
         server_->Get("/stream", [](const httplib::Request& req, httplib::Response& res) {
             res.set_chunked_content_provider(
@@ -49,7 +75,7 @@ private:
                 }
             );
             });
-        std::cout << "Server started at http://" << local_ip_.c_str() << ":" << port_ << "/stream" << std::endl;
+        std::cout << "Server started at http://127.0.0.1:" << port_ << " and /stream" << std::endl;
         server_->listen(local_ip_.c_str(), port_);
     }
 
