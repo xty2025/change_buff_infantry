@@ -19,6 +19,47 @@
             "GRAVITY": 9.8,
             "SMALL_POWER_RUNE_ROTATION_SPEED": 1.04719,
             "armor_width": 270,
+            "shoot_table_adjust": {
+                "enable": false,
+                "pitch": {
+                    "coef_d": 0.0,
+                    "coef_d2": 0.0,
+                    "coef_z": 0.0,
+                    "coef_z2": 0.0,
+                    "coef_zd": 0.0,
+                    "intercept": 0.0
+                },
+                "yaw": {
+                    "coef_d": 0.0,
+                    "coef_d2": 0.0,
+                    "coef_z": 0.0,
+                    "coef_z2": 0.0,
+                    "coef_zd": 0.0,
+                    "intercept": 0.0
+                }
+            },
+            "buff_shooting_table_calib": {
+                "apply_on_big_buff_only": true,
+                "enable": false,
+                "pitch": {
+                    "coef_cos": 0.0,
+                    "coef_cos2": 0.0,
+                    "coef_dist": 0.0,
+                    "coef_height": 0.0,
+                    "coef_sin": 0.0,
+                    "coef_sin2": 0.0,
+                    "intercept": 0.0
+                },
+                "yaw": {
+                    "coef_cos": 0.0,
+                    "coef_cos2": 0.0,
+                    "coef_dist": 0.0,
+                    "coef_height": 0.0,
+                    "coef_sin": 0.0,
+                    "coef_sin2": 0.0,
+                    "intercept": 0.0
+                }
+            },
             "blue_buff_model_path": "../utils/buff_models/buff_blue_xtynew/best.xml",
             "buff_size": 270,
             "force_stable": false,

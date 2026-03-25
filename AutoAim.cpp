@@ -97,6 +97,7 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
     bool buff_success = false;// 大能量机关计算是否成功
     bool reload_big_buff = true;// 是否重新加载大能量机关
     bool buff_two_target_cycle = false;
+    int todo_debug_mode = -1; // -1: use serial request, 0: normal armor, 1: small buff, 2: big buff
     std::chrono::steady_clock::time_point buff_cycle_start = std::chrono::steady_clock::now();
     int buff_primary_idx = 0;
     int buff_secondary_idx = 1;
@@ -281,13 +282,21 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
                 buff_mode = 0;
         }
         else{hitBuff = false; buff_mode = 0;}
-        //TODO debug
-        
-        hitBuff = true ;//
-        imu.aim_request == 2;
-        std::cout<<"set ture"<<std::endl;
-        buff_mode = 1; //1小符2大符
 
+        // todo_debug:
+        // 修改 todo_debug_mode 数字可以强制切换模式，便于本地联调。
+        // 0: 打车, 1: 小符, 2: 大符, -1: 跟随串口 aim_request。
+        if (todo_debug_mode == 0) {
+            hitBuff = false;
+            buff_mode = 0;
+        } else if (todo_debug_mode == 1) {
+            hitBuff = true;
+            buff_mode = 1;
+        } else if (todo_debug_mode == 2) {
+            hitBuff = true;
+            buff_mode = 2;
+        }
+        //TODO debug
         
         //TODO
         //xjj

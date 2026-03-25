@@ -1,6 +1,9 @@
 #pragma once
 #include <ceres/ceres.h>
+#include <array>
+#include <atomic>
 #include <chrono>
+#include <cmath>
 #include <fstream>
 #include <Eigen/Core>
 #include <Eigen/Geometry>
@@ -102,6 +105,7 @@ class BuffCalculator {
                             {(float)(0.5 * json_param["buff"]["armor_width"].Double()), 0.0, 0.0},
                             {0.0, (float)(0.5 * json_param["buff"]["armor_width"].Double()), 0.0},
                             {(float)(-0.5 * json_param["buff"]["armor_width"].Double()), 0.0, 0.0}};
+            FPS = json_param["buff"]["FPS"].Double();
             // m_directionThresh = {100 / (1000 / FPS) < 2 ? 2 : 100 / (1000 / FPS)};
             m_directionThresh = {static_cast<int>(100 / (1000 / FPS) < 2.0 ? 2 : 100 / (1000 / FPS))};
             COMPANSATE_TIME = json_param["buff"]["COMPANSATE_TIME"].Double();
@@ -110,11 +114,11 @@ class BuffCalculator {
             AFTER_PITCH = json_param["buff"]["AFTER_PITCH"].Double();
             AFTER_YAW = json_param["buff"]["AFTER_YAW"].Double();
             GRAVITY = json_param["buff"]["GRAVITY"].Double();
-            FPS = json_param["buff"]["FPS"].Double();
             
             m_fitData.reserve(FPS * 20);
             m_fitThread = std::thread(&BuffCalculator::fit, this);
             force_stable = json_param["buff"]["force_stable"].Bool();
+            loadShootTableAdjust(json_param);
 
             auto intrinsicArray = json_param["solver"]["camera_intrinsic_matrix"].to<std::vector<std::vector<double>>>();
             Eigen::Matrix3d cameraIntrinsicMatrix;
@@ -156,6 +160,18 @@ class BuffCalculator {
         inline std::pair<double, double> getPredictPitchYaw() {
             return std::make_pair(m_predictPitch, m_predictYaw);
         }
+        inline double getPredictRotationAngle() const {
+            return m_predictRotationAngle;
+        }
+        inline double getPredictDistanceM() const {
+            return std::hypot(m_predictRobot.x, m_predictRobot.z) * 1e-3;
+        }
+        inline double getPredictHeightM() const {
+            return m_predictRobot.y * 1e-3;
+        }
+        void setApplyStaticShootTableAdjust(bool enable) { static_shoot_table_adjust_enable = enable; }
+        void setApplyPeriodicShootTableAdjust(bool enable) { buff_shoot_table_adjust_enable = enable; }
+        void setForceStable(bool enable) { force_stable = enable; }
         cv::Point2f getPixelFromCamera(const cv::Mat &intrinsicMatrix, const cv::Mat &cameraPoint);
         cv::Point2f getPixelFromRobot(const cv::Point3f &robot, const cv::Mat &w2c, const cv::Mat &w2r);
         std::pair<double, double> getPitchYawFromRobotCoor(const cv::Point3f &target, double bulletSpeed);
@@ -179,6 +195,11 @@ class BuffCalculator {
         bool predict();
         void fit();
         bool fitOnce();
+        void loadShootTableAdjust(const param::Param& json_param);
+        double fitStaticShootTableDeg(const std::array<double, 6>& coeffs, double z_height_m,
+                                     double horizontal_distance_m) const;
+        double fitBuffPeriodicDeg(const std::array<double, 7>& coeffs, double rotation_angle,
+                                 double distance_m, double height_m) const;
 
         // Eigen::Matrix3d cameraIntrinsicMatrix;
         // Vector5d distorationCoefficients;// k1,k2,p1,p2,k3
@@ -229,6 +250,7 @@ class BuffCalculator {
         double m_receiveYaw;                               // 当前帧的yaw
         double m_predictPitch;
         double m_predictYaw;
+        double m_predictRotationAngle = 0.0;
         int m_directionThresh;
         std::thread m_fitThread;
         int m_buff_mode;
@@ -237,6 +259,13 @@ class BuffCalculator {
 
         double small_power_rune_rotation_speed;
         double power_radius;
+        bool static_shoot_table_adjust_enable = false;
+        std::array<double, 6> static_pitch_adjust_param{{0.0, 0.0, 0.0, 0.0, 0.0, 0.0}};
+        std::array<double, 6> static_yaw_adjust_param{{0.0, 0.0, 0.0, 0.0, 0.0, 0.0}};
+        bool buff_shoot_table_adjust_enable = false;
+        bool buff_shoot_table_big_only = true;
+        std::array<double, 7> buff_pitch_adjust_param{{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}};
+        std::array<double, 7> buff_yaw_adjust_param{{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}};
         //    m_predictPitch = predictPitch;
         //    m_predictYaw = predictYaw;
 };
