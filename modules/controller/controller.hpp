@@ -4,6 +4,7 @@
 #include "solver/type.hpp"
 #include "TimeStamp/TimeStamp.hpp"
 #include "Param/param.hpp"
+#include <vector>
 #include<stack>
 //核心计算函数：
 // bool calcPitchYaw(double& pitch, double& yaw, double& time, double target_x, double target_y, double target_z);
@@ -72,6 +73,28 @@ json_param(json_param) 表示用构造函数的参数 json_param 来初始化类
         bool mouse_require = false;
         double pic_camera_x = 640.0; //图传模块中心点在相机坐标系中的坐标
         double pic_camera_y = 512.0; //图传模块中心点在相机坐标系中的坐标
+
+        bool shoot_table_adjust = false;
+        std::vector<double> pitch_param{0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+        std::vector<double> yaw_param{0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+
+        // 常规装甲板 pitch 补偿（角度单位：deg）
+        // offset = pitch_offset_deg + pitch_offset_per_meter * (distance_m - pitch_offset_ref_distance)
+        bool pitch_offset_enable = false;
+        double pitch_offset_deg = 0.0;
+        double pitch_offset_per_meter = 0.0;
+        double pitch_offset_ref_distance = 5.0;
+
+        inline double getPitchOffsetDeg(double distance_m) const {
+            if (!pitch_offset_enable) {
+                return 0.0;
+            }
+            return pitch_offset_deg + pitch_offset_per_meter * (distance_m - pitch_offset_ref_distance);
+        }
+
+        double fitPitchRad(double z_height, double horizontal_distance) const;
+        double fitYawRad(double z_height, double horizontal_distance) const;
+        double fitPolynomialDeg(const std::vector<double>& param, double z_height, double horizontal_distance) const;
     };
 
     std::shared_ptr<Controller> createController(param::Param json_param);

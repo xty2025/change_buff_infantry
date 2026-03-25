@@ -8,6 +8,22 @@
 #include <algorithm>
 #include <iomanip>
 #include <sstream>
+#include <iostream>
+#include <cstdlib>
+
+namespace {
+bool isHighGuiDisplayAvailable() {
+    const char* disable_imshow = std::getenv("DISABLE_OPENCV_IMSHOW");
+    if (disable_imshow != nullptr && disable_imshow[0] != '\0' && disable_imshow[0] != '0') {
+        return false;
+    }
+
+    const char* display = std::getenv("DISPLAY");
+    const char* wayland_display = std::getenv("WAYLAND_DISPLAY");
+    return (display != nullptr && display[0] != '\0') ||
+           (wayland_display != nullptr && wayland_display[0] != '\0');
+}
+} // namespace
 
 namespace power_rune {
 // std::mutex MUTEX; //
@@ -87,6 +103,9 @@ void BuffDetector::drawDebugOverlay(cv::Mat& image, bool print_coords) const {
     if (image.empty()) {
         return;
     }
+    //xty::
+    //调试这里关掉文字可以压缩
+    //print_coords=false;
 
     if (m_has_raw_detect) {
         for (size_t i = 0; i < m_last_boxes.size(); ++i) {
@@ -164,7 +183,22 @@ bool BuffDetector::findBuffArmor(Armor& armor) {
     input_image=input_image;//转换后的。
     //创建推理。
     blob = cv::dnn::blobFromImage(letterbox_img, 1.0 / 255.0, cv::Size(MODEL_IMG_SIZE, MODEL_IMG_SIZE), cv::Scalar(), true);
-    cv::imshow("letterbox_img", letterbox_img);
+    static bool s_highgui_available = isHighGuiDisplayAvailable();
+    if (s_highgui_available) {
+        try {
+            cv::imshow("letterbox_img", letterbox_img);
+            cv::waitKey(1);
+        } catch (const cv::Exception& e) {
+            std::cerr << "[BUFF] HighGUI unavailable, disable imshow. reason: " << e.what() << std::endl;
+            s_highgui_available = false;
+        } catch (const std::exception& e) {
+            std::cerr << "[BUFF] Disable imshow due to exception: " << e.what() << std::endl;
+            s_highgui_available = false;
+        } catch (...) {
+            std::cerr << "[BUFF] Disable imshow due to unknown exception." << std::endl;
+            s_highgui_available = false;
+        }
+    }
     /*cv::dnn::blobFromImage(
     letterbox_img,          // 输入图像（经过letterbox预处理的图像）
     1.0 / 255.0,            // 缩放因子（将像素值从[0,255]归一化到[0,1]）

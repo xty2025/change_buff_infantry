@@ -10,13 +10,18 @@ using namespace modules;
 using namespace aimlog;
 
 int main() {
-    Param param("../config.json");
+    param::Param param("../config.json");
     param = param["quanxiang"];
 
-    auto driver = createDriver();
-    auto solver = createSolver(param["X"].Double(), param["Y"].Double(), param["X1"].Double(), 
-                                param["Y1"].Double(), param["X2"].Double(), param["Y2"].Double());
-    auto detector = createDetector("../utils/models/armor_yolo_x.xml");
+    //auto driver=createDriver();用于直接从串口读取；
+    //auto driver=createDriver();
+    auto driver = createReplayer(
+    "/home/hustlyrm/xty/change_buff_infantry/record/serial/20260302163320.txt",
+    "/home/hustlyrm/xty/change_buff_infantry/record/video/20260302163320.avi",
+    false,
+    1.0f);
+    auto solver = createSolver(param["solver"]);
+    auto detector = createDetector(param["detector"]);
 
 
     SerialConfig config{"/dev/ttyACM0", 115200};
@@ -51,7 +56,7 @@ int main() {
     Eigen::Vector5d distorationCoefficients = Eigen::Vector5d(-0.196854458412759, 0.0928923269301880, 0, 0, 0.0642790747423870);
     recordSolver::setDistorationCoefficients(distorationCoefficients);
 
-    detector->setEnemyColor(1);
+    // 不固定敌方颜色，循环内按蓝->红双尝试，避免颜色配置不匹配导致无装甲写入
 
     Time::TimeStamp lastDetectTime;
     while(1)
@@ -67,8 +72,15 @@ int main() {
         lastDetectTime = frame->timestamp;
         ParsedSerialData imu = driver->findNearestSerialData(frame->timestamp);
         driver->clearSerialData();
-        auto detections = detector->detect(frame->image);
-        ArmorXYVs detectResults;
+        detector->setEnemyColor(1); // blue
+        auto detections_pair = detector->detect(frame->image);
+        auto &detections = detections_pair.first;
+        if (detections.empty()) {
+            detector->setEnemyColor(0); // red
+            detections_pair = detector->detect(frame->image);
+            detections = detections_pair.first;
+        }
+        std::vector<ArmorXYV> detectResults;
         for(const auto &detection : detections)
         {
             if(detection.corners.size() != 4)

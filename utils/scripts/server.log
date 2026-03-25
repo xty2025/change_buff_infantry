@@ -1417,3 +1417,12 @@
 2026-02-26 17:49:20,094 [INFO] 127.0.0.1 - - [26/Feb/2026 17:49:20] "GET /video_feed HTTP/1.1" 200 -
 2026-02-26 17:49:20,303 [INFO] 127.0.0.1 - - [26/Feb/2026 17:49:20] "GET /api/config HTTP/1.1" 200 -
 2026-02-26 17:52:44,422 [ERROR] 视频流错误: ("Connection broken: InvalidChunkLength(got length b'', 0 bytes read)", InvalidChunkLength(got length b'', 0 bytes read))
+2026-02-28 21:22:58,135 [INFO] find ip:192.168.137.67
+2026-02-28 21:22:58,140 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8080
+ * Running on http://192.168.137.67:8080
+2026-02-28 21:22:58,140 [INFO] [33mPress CTRL+C to quit[0m
+2026-02-28 21:23:00,205 [INFO] 127.0.0.1 - - [28/Feb/2026 21:23:00] "GET / HTTP/1.1" 200 -
+2026-02-28 21:23:00,251 [INFO] 127.0.0.1 - - [28/Feb/2026 21:23:00] "GET /video_feed HTTP/1.1" 200 -
+2026-02-28 21:23:00,435 [INFO] 127.0.0.1 - - [28/Feb/2026 21:23:00] "GET /api/config HTTP/1.1" 200 -

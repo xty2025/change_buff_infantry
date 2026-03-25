@@ -3,7 +3,7 @@
     "quanxiang": {
         "UDP": {
             "enable": true,
-            "ip":"192.168.137.1",
+            "ip": "192.168.137.1",
             "port": 1347
         },
         "auto_white_balance": true,
@@ -19,6 +19,47 @@
             "GRAVITY": 9.8,
             "SMALL_POWER_RUNE_ROTATION_SPEED": 1.04719,
             "armor_width": 270,
+            "shoot_table_adjust": {
+                "enable": false,
+                "pitch": {
+                    "coef_d": 0.0,
+                    "coef_d2": 0.0,
+                    "coef_z": 0.0,
+                    "coef_z2": 0.0,
+                    "coef_zd": 0.0,
+                    "intercept": 0.0
+                },
+                "yaw": {
+                    "coef_d": 0.0,
+                    "coef_d2": 0.0,
+                    "coef_z": 0.0,
+                    "coef_z2": 0.0,
+                    "coef_zd": 0.0,
+                    "intercept": 0.0
+                }
+            },
+            "buff_shooting_table_calib": {
+                "apply_on_big_buff_only": true,
+                "enable": false,
+                "pitch": {
+                    "coef_cos": 0.0,
+                    "coef_cos2": 0.0,
+                    "coef_dist": 0.0,
+                    "coef_height": 0.0,
+                    "coef_sin": 0.0,
+                    "coef_sin2": 0.0,
+                    "intercept": 0.0
+                },
+                "yaw": {
+                    "coef_cos": 0.0,
+                    "coef_cos2": 0.0,
+                    "coef_dist": 0.0,
+                    "coef_height": 0.0,
+                    "coef_sin": 0.0,
+                    "coef_sin2": 0.0,
+                    "intercept": 0.0
+                }
+            },
             "blue_buff_model_path": "../utils/buff_models/buff_blue_xtynew/best.xml",
             "buff_size": 270,
             "force_stable": false,
@@ -43,16 +84,35 @@
             "pic_camera_x": 640,
             "pic_camera_y": 512,
             "response_speed": 0.01,
-            "shoot_delay": 0
+            "shoot_delay": 0,
+            "shoot_table_adjust": {
+                "enable": true,
+                "pitch": {
+                    "coef_d": 2.06,
+                    "coef_d2": -0.07,
+                    "coef_z": 12.7579,
+                    "coef_z2": 0.0,
+                    "coef_zd": -0.0,
+                    "intercept": 10.184428
+                },
+                "yaw": {
+                    "coef_d": 0.24662,
+                    "coef_d2": -0.199115,
+                    "coef_z": -13.881912,
+                    "coef_z2": 0.00,
+                    "coef_zd": 0.00,
+                    "intercept": -4.402701
+                }
+            }
         },
-        "debug_on_image": true,
+        "debug_on_image": false,
         "detector": {
             "#model_path": "../utils/models/BRpoints_nano.xml",
             "car_model_path": "../utils/models/yolo11n-416sgd4.xml",
             "model_path": "../utils/models/armor_yolo_x.xml",
             "use_old_model": true
         },
-        "enemy_color": "auto",
+        "enemy_color": "blue",
         "exposure_time": 3000,
         "force_shoot": false,
         "gain": 16,
@@ -61,22 +121,22 @@
         "shoot_enable": true,
         "solver": {
             "camera_distortion_matrix": [
-                -0.0562,
-                0.1271,
-                0,
-                0,
-                0.0793
+                -0.2094,
+                0.1527,
+                0.0,
+                0.0,
+                0.0
             ],
             "camera_intrinsic_matrix": [
                 [
-                    1695.4,
+                    1276.9,
                     0,
-                    643.756
+                    624.9986
                 ],
                 [
                     0,
-                    1697.6,
-                    486.6399
+                    1276.7,
+                    495.3118
                 ],
                 [
                     0,
@@ -87,7 +147,7 @@
             "camera_offset": [
                 124.59,
                 -30.25,
-                56.3
+                80.3
             ],
             "camera_rotation": [
                 0,
