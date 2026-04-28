@@ -11,6 +11,7 @@
 #include <Location/location.hpp>
 #include <chrono>
 #include <atomic>
+#include <mutex>
 using namespace modules;
 using namespace aimlog;
 using namespace recording;
@@ -33,6 +34,54 @@ std::map<std::string, int> enemyTrans = {
     {"r&b", -3}
 };
 
+namespace {
+struct SharedBuffAimState {
+    std::mutex mutex;
+    bool ready = false;
+    float pitch = 0.0f;
+    float yaw = 0.0f;
+};
+
+struct BuffAimSnapshot {
+    bool ready = false;
+    float pitch = 0.0f;
+    float yaw = 0.0f;
+};
+
+struct LogThrottle {
+    std::mutex mutex;
+    std::chrono::steady_clock::time_point last_log_time{};
+    bool has_last_log_time = false;
+
+    bool shouldLog(bool detailed_debug_log) {
+        if (detailed_debug_log) {
+            return true;
+        }
+
+        const auto now = std::chrono::steady_clock::now();
+        std::lock_guard<std::mutex> lock(mutex);
+        if (!has_last_log_time || now - last_log_time >= std::chrono::seconds(1)) {
+            last_log_time = now;
+            has_last_log_time = true;
+            return true;
+        }
+        return false;
+    }
+};
+
+BuffAimSnapshot readBuffAimState(const std::shared_ptr<SharedBuffAimState>& state) {
+    std::lock_guard<std::mutex> lock(state->mutex);
+    return BuffAimSnapshot{state->ready, state->pitch, state->yaw};
+}
+
+void writeBuffAimState(const std::shared_ptr<SharedBuffAimState>& state, bool ready, float pitch, float yaw) {
+    std::lock_guard<std::mutex> lock(state->mutex);
+    state->ready = ready;
+    state->pitch = pitch;
+    state->yaw = yaw;
+}
+} // namespace
+
 int main() {
     param::Param param("../config.json");
     param = param[param["car_name"].String()];
@@ -44,6 +93,7 @@ int main() {
     bool record_enable = param["record_enable"].Bool();
     bool force_shoot = param["force_shoot"].Bool();
     bool draw_debug_image = param["debug_on_image"].Bool();
+    bool detailed_debug_log = param["detailed_debug_log"].Bool();
 
     //xty::
 
@@ -85,28 +135,33 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
     auto detector = createDetector(param["detector"], false);
     auto tracker = createTracker();
 
-    //xjj
+    //xty
     std::string red_buff_model_path = (param["buff"])["red_buff_model_path"].String();
     std::string blue_buff_model_path = (param["buff"])["blue_buff_model_path"].String();    
     bool EfficiencyFirst = param["buff"]["EfficiencyFirst"].Bool();// 是否性能优先,可给步兵打大符的优先级。
     BuffDetector buff_detector(red_buff_model_path, blue_buff_model_path); // 创建大能量机关检测器
     BuffCalculator buff_calculator(param);   //属于solver 越級了, 后面加新模塊buff再移
     BuffController buff_controller;
-    bool hitBuff = false;// 是否正在攻击大能量机关
+    auto hitBuff = std::make_shared<std::atomic<bool>>(false);// 鏄惁姝ｅ湪鏀诲嚮澶ц兘閲忔満鍏?
     int buff_mode = 0;// 大能量机关模式
     bool buff_success = false;// 大能量机关计算是否成功
     bool reload_big_buff = true;// 是否重新加载大能量机关
     bool buff_two_target_cycle = false;
+    bool buff_dual_target_enable = false;
+    int todo_debug_mode = -1; // -1: use serial request, 0: normal armor, 1: small buff, 2: big buff
     std::chrono::steady_clock::time_point buff_cycle_start = std::chrono::steady_clock::now();
     int buff_primary_idx = 0;
     int buff_secondary_idx = 1;
     auto buff_dual_target_active = std::make_shared<std::atomic<bool>>(false);
     auto buff_switch_to_second = std::make_shared<std::atomic<bool>>(false);
     auto buff_prev_shoot_cmd = std::make_shared<std::atomic<bool>>(false);
-    // 新增共享变量
-// 新增共享变量，用于在不同线程间传递大能量机关的瞄准角度
-    std::shared_ptr<float> buff_pitch = std::make_shared<float>(0.0);
-    std::shared_ptr<float> buff_yaw = std::make_shared<float>(0.0);
+    auto buff_last_shoot_flag = std::make_shared<std::atomic<int>>(0);
+    auto buff_selected_idx_shared = std::make_shared<std::atomic<int>>(-1);
+    auto buff_detect_cnt_shared = std::make_shared<std::atomic<int>>(0);
+    auto buff_aim_state = std::make_shared<SharedBuffAimState>();
+    auto solve_log_throttle = std::make_shared<LogThrottle>();
+    auto buff_pipeline_log_throttle = std::make_shared<LogThrottle>();
+    auto main_loop_log_throttle = std::make_shared<LogThrottle>();
     //xjj
   // 将姿态解算器注册到location模块，用于坐标系转换
     location::Location::registerSolver(solver);
@@ -124,7 +179,7 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
 
 // 配置串口和相机
 //type.hpp
-    SerialConfig config{param["serial_name"].String(), param["baud_rate"].Int()};
+    SerialConfig config{param["serial_name"].String(), param["baud_rate"].Int(), detailed_debug_log};
     CameraConfig cameraConfig{
         .cameraSN = param["camera_id"].String(), //前后相机
         .autoWhiteBalance = param["auto_white_balance"].Bool(),//白平衡开启
@@ -138,8 +193,8 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
     // 注册串口读取回调函数，该函数在收到新串口数据时被调用
     //driver->registeReadCallback(std::function<void(const ParsedSerialData&)>callback);
     driver->registReadCallback(
-    [control_func = driver->sendSerialFunc() ,controller, &buff_success, buff_controller, &hitBuff, buff_pitch, buff_yaw, shoot_enable,force_shoot,record_enable,
-     buff_dual_target_active, buff_switch_to_second, buff_prev_shoot_cmd]
+    [control_func = driver->sendSerialFunc(), controller, buff_controller, hitBuff, buff_aim_state, shoot_enable, force_shoot, record_enable,
+        buff_dual_target_active, buff_switch_to_second, buff_prev_shoot_cmd, buff_last_shoot_flag, solve_log_throttle, detailed_debug_log]
     (const ParsedSerialData& parsedData)
     {
     //lambda:[捕获列表](捕获参数)->返回对象(函数体)
@@ -149,8 +204,9 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
         {
             Recorder::instance().addSerialData(parsedData);
         }
+        const BuffAimSnapshot buff_target = readBuffAimState(buff_aim_state);
         //xjj
-        if(!hitBuff)
+        if(!hitBuff->load())
         {
             //如果不打符，调用常规控制器计算控制结果。
             result = controller->control(parsedData);
@@ -158,15 +214,40 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
             // 如果强制射击，则设置射击标志
             result.shoot_flag = shoot_enable? result.shoot_flag : 0;
 
+            if (solve_log_throttle->shouldLog(detailed_debug_log)) {
+                INFO("[solve] normal pitch_setpoint={}, yaw_setpoint={}, pitch_now={}, yaw_now={}, shoot_flag={}",
+                     result.pitch_setpoint, result.yaw_setpoint, parsedData.pitch_now, parsedData.yaw_now, result.shoot_flag);
+            }
+            buff_last_shoot_flag->store(result.shoot_flag);
+
             // 根据配置决定是否允许射击
             control_func(result);
-            std::cout<<"7777"<<std::endl;//打车
         }
         else //buff
         {
             // 调用大能量机关控制器计算控制结果
-            std::cout<<"8888888888888"<<std::endl;
-            BuffControlResult buff_result = buff_controller.buff_control(parsedData, buff_pitch, buff_yaw);
+            if (!buff_target.ready) {
+                result.shoot_flag = 0;
+                result.pitch_setpoint = parsedData.pitch_now;
+                result.yaw_setpoint = parsedData.yaw_now;
+                result.pitch_actual_want = parsedData.pitch_now;
+                result.yaw_actual_want = parsedData.yaw_now;
+                result.valid = true;
+                buff_prev_shoot_cmd->store(false);
+                buff_last_shoot_flag->store(0);
+                if (solve_log_throttle->shouldLog(detailed_debug_log)) {
+                    INFO("[solve] buff not ready, holding current pose pitch={}, yaw={}",
+                         parsedData.pitch_now, parsedData.yaw_now);
+                }
+                control_func(result);
+                UdpSend::sendData((float)result.pitch_setpoint);
+                UdpSend::sendData((float)result.yaw_setpoint);
+                UdpSend::sendData((float)parsedData.pitch_now);
+                UdpSend::sendData((float)parsedData.yaw_now);
+                UdpSend::sendTail();
+                return;
+            }
+            BuffControlResult buff_result = buff_controller.buff_control(parsedData, buff_target.pitch, buff_target.yaw);
             if(force_shoot) buff_result.shoot_flag = 1;
             buff_result.shoot_flag = shoot_enable? buff_result.shoot_flag : 0;
 
@@ -183,10 +264,26 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
             result.yaw_setpoint = buff_result.yaw_setpoint;
             result.pitch_actual_want = buff_result.pitch_actual_want;
             result.yaw_actual_want = buff_result.yaw_actual_want;
-            std::cout<<"flag:"<<result.shoot_flag<<", pitch_setpoint:"<<result.pitch_setpoint<<", yaw_setpoint:"<<
-                result.yaw_setpoint<<", pitch_actual_want:"<<result.pitch_actual_want<<", yaw_actual_want:"<<result.yaw_actual_want<<std::endl;
+
+            //xty::
+            float pitch_err = result.pitch_setpoint - parsedData.pitch_now;
+            float yaw_err = std::remainder(result.yaw_setpoint - parsedData.yaw_now, 360.0f);
+            const bool should_log_solve = solve_log_throttle->shouldLog(detailed_debug_log);
+            if (should_log_solve) {
+                INFO("[solve] buff pitch_setpoint={}, yaw_setpoint={}, pitch_actual_want={}, yaw_actual_want={}, pitch_now={}, yaw_now={}, shoot_flag={}",
+                     result.pitch_setpoint, result.yaw_setpoint, result.pitch_actual_want, result.yaw_actual_want,
+                     parsedData.pitch_now, parsedData.yaw_now, result.shoot_flag);
+                INFO("[buff_debug] err_pitch={}, err_yaw={}, available_shoot_number={}, shoot_enable={}",
+                     pitch_err, yaw_err, static_cast<int>(parsedData.available_shoot_number), static_cast<int>(shoot_enable));
+                if (result.shoot_flag && parsedData.available_shoot_number == 0) {
+                    WARN("[buff_debug] shoot_flag=1 but available_shoot_number=0, lower controller may block shooting");
+                }
+            }
+           
+              
             result.valid = true;
             control_func(result);
+            buff_last_shoot_flag->store(result.shoot_flag);
         }
         //xjj
                 UdpSend::sendData((float)result.pitch_setpoint);
@@ -226,7 +323,11 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
         imu = driver->findNearestSerialData(frame->timestamp);
         ImuData imu_data = imu;
         receive_enemy_color = imu.enemy_color;
-        INFO("aim_request: {}", imu.aim_request);
+        const bool should_log_main_loop = main_loop_log_throttle->shouldLog(detailed_debug_log);
+        if (should_log_main_loop) {
+            INFO("[main_loop] aim_request={}, hit_buff={}, mode={}",
+                 static_cast<int>(imu.aim_request), hitBuff->load(), buff_mode);
+        }
         if(autoEnemy)
             detector->setEnemyColor(1 - receive_enemy_color);
         driver->clearSerialData();
@@ -252,22 +353,37 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
         
         // xjj
         if (imu.aim_request == 2 || imu.aim_request == 4) {
-            hitBuff = true;
-            if (imu.aim_request == 2) 
+            hitBuff->store(true);
+            if (imu.aim_request == 2)
                 buff_mode = 1;
-            else if (imu.aim_request == 4) 
+            else if (imu.aim_request == 4)
                 buff_mode = 2;
-            else 
+            else
                 buff_mode = 0;
         }
-        else{hitBuff = false; buff_mode = 0;}
-        //TODO debug
-        // hitBuff = true ;//imu.aim_request == 2;
-        // std::cout<<"set ture"<<std::endl;
-        // buff_mode = 1; //1小符2大符
-        //TODO
+        else{
+            hitBuff->store(false);
+            writeBuffAimState(buff_aim_state, false, imu.pitch_now, imu.yaw_now);
+            buff_mode = 0;
+        }
+
+        // todo_debug:
+        // 淇敼 todo_debug_mode 鏁板瓧鍙互寮哄埗鍒囨崲妯″紡锛屼究浜庢湰鍦拌仈璋冦€?
+        // 褰撳墠榛樿鍊艰涓?1锛屼富绋嬪簭浼氬己鍒惰蛋灏忕锛涙敼鍥?-1 鍙窡闅忎覆鍙ｅ尯鍒嗗皬绗?澶х銆?
+        // 0: 鎵撹溅, 1: 灏忕, 2: 澶х, -1: 璺熼殢涓插彛 aim_request銆?
+        if (todo_debug_mode == 0) {
+            hitBuff->store(false);
+            writeBuffAimState(buff_aim_state, false, imu.pitch_now, imu.yaw_now);
+            buff_mode = 0;
+        } else if (todo_debug_mode == 1) {
+            hitBuff->store(true);
+            buff_mode = 1;
+        } else if (todo_debug_mode == 2) {
+            hitBuff->store(true);
+            buff_mode = 2;
+        }
         //xjj
-        if (!EfficiencyFirst || !hitBuff)//性能优先时不进行装甲板检测   !EfficiencyFirst || !hitBuff
+        if (!EfficiencyFirst || !hitBuff->load())//鎬ц兘浼樺厛鏃朵笉杩涜瑁呯敳鏉挎娴?  !EfficiencyFirst || !hitBuff
         {
             //TODO
             reload_big_buff = true; //for big buff
@@ -285,8 +401,10 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
                                               " s=" + std::to_string(armor_det.score).substr(0, 4);
                     cv::putText(frame->image, armor_label, armor_det.bounding_rect.tl() + cv::Point2f(0, -6),
                                 cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 255), 2);
-                    INFO("armor detection rect: x={}, y={}, w={}, h={}", armor_det.bounding_rect.x,
-                         armor_det.bounding_rect.y, armor_det.bounding_rect.width, armor_det.bounding_rect.height);
+                    if (detailed_debug_log) {
+                        INFO("armor detection rect: x={}, y={}, w={}, h={}", armor_det.bounding_rect.x,
+                             armor_det.bounding_rect.y, armor_det.bounding_rect.width, armor_det.bounding_rect.height);
+                    }
                 }
                 for (const auto& car_det : detections.second) {
                     cv::rectangle(frame->image, car_det.bounding_rect, cv::Scalar(255, 0, 0), 2);
@@ -294,8 +412,10 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
                                             " s=" + std::to_string(car_det.score).substr(0, 4);
                     cv::putText(frame->image, car_label, car_det.bounding_rect.tl() + cv::Point2f(0, -6),
                                 cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 0, 0), 2);
-                    INFO("car detection rect: x={}, y={}, w={}, h={}", car_det.bounding_rect.x,
-                         car_det.bounding_rect.y, car_det.bounding_rect.width, car_det.bounding_rect.height);
+                    if (detailed_debug_log) {
+                        INFO("car detection rect: x={}, y={}, w={}, h={}", car_det.bounding_rect.x,
+                             car_det.bounding_rect.y, car_det.bounding_rect.width, car_det.bounding_rect.height);
+                    }
                 }
             }
             tracker->merge(detections.first);
@@ -377,7 +497,9 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
                                 cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 5);
                 }
             }
-            INFO("TrackResults size: {}", trackResults.first.size());
+            if (should_log_main_loop) {
+                INFO("[main_loop] track_results_size={}", trackResults.first.size());
+            }
             predictor->update(trackResults, frame->timestamp);
 
 
@@ -401,15 +523,17 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
                 //UdpSend::sendData((float) prediction.vx);
                 //UdpSend::sendData((float) prediction.vy);
                 //UdpSend::sendData((float) prediction.theta);
-
-
-                INFO("ENTER center: x: {}, y: {}, z: {}", center.x, center.y, center.z);
+                if (detailed_debug_log) {
+                    INFO("ENTER center: x: {}, y: {}, z: {}", center.x, center.y, center.z);
+                }
                 //trans to CXYD
                 location::Location temp;
                 temp.imu = imu_data;
                 temp.xyz_imu = center;
                 CXYD coord = temp.cxy;
-                INFO("ENTER coord: cx: {}, cy: {}", coord.cx, coord.cy);
+                if (detailed_debug_log) {
+                    INFO("ENTER coord: cx: {}, cy: {}", coord.cx, coord.cy);
+                }
                 cv::circle(frame->image, cv::Point(coord.cx, coord.cy), 8, cv::Scalar(200, 200, 200), -1);
                 for (auto &armor: prediction.armors) {
                     auto armor_center = armor.center;
@@ -424,8 +548,8 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
                     armor_center.z = 0;
                     temp.xyz_imu = armor_center;
                     CXYD armor_coord_z0 = temp.cxy;
-                    cv::line(frame->image, cv::Point(armor_coord.cx, armor_coord.cy),
-                             cv::Point(armor_coord_z0.cx, armor_coord_z0.cy), cv::Scalar(255, 255, 0), 2);
+                        // cv::line(frame->image, cv::Point(armor_coord.cx, armor_coord.cy),
+                        //          cv::Point(armor_coord_z0.cx, armor_coord_z0.cy), cv::Scalar(255, 255, 0), 2);
                     std::string text = std::to_string(armor.yaw - temp.imu.yaw);
                                         cv::putText(frame->image, text, cv::Point(armor_coord.cx, armor_coord.cy), cv::FONT_HERSHEY_SIMPLEX,
                                 0.5, cv::Scalar(0, 255, 255), 2);
@@ -454,7 +578,9 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
                 for (auto &trackResult: trackResults.first) {
                     XYZ armor_xyz = trackResult.location.xyz_imu;
                     //UdpSend::sendData(armor_xyz.x);
-                    INFO("debug_armor x: {}, y: {}, z: {}", armor_xyz.x, armor_xyz.y, armor_xyz.z);
+                    if (detailed_debug_log) {
+                        INFO("debug_armor x: {}, y: {}, z: {}", armor_xyz.x, armor_xyz.y, armor_xyz.z);
+                    }
                     //UdpSend::sendData(armor_xyz.y);
                     count_armor_debug++;
                     if (count_armor_debug >= 2)
@@ -472,10 +598,16 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
             // buff_detector
             int enemy_color = imu.enemy_color;
             buff_success = false;
-            std::cout<<"buff現時："<<imu.pitch_now << ", "<<imu.yaw_now << std::endl;
+            const bool should_log_buff_pipeline = buff_pipeline_log_throttle->shouldLog(detailed_debug_log);
             if (buff_detector.buffDetect(frame->image, enemy_color) == false) {
-                std::cout<<"detectfail"<<std::endl;
                 buff_success = false;
+                writeBuffAimState(buff_aim_state, false, imu.pitch_now, imu.yaw_now);
+                buff_detect_cnt_shared->store(0);
+                buff_selected_idx_shared->store(-1);
+                if (should_log_buff_pipeline) {
+                    INFO("[buff_pipeline] detect fail mode={}, imu_pitch={}, imu_yaw={}",
+                         buff_mode, imu.pitch_now, imu.yaw_now);
+                }
 
                 //xty::
 
@@ -483,11 +615,11 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
 
                 if (draw_overlay) {
                     buff_detector.drawDebugOverlay(frame->image, true);
+                    cv::putText(frame->image, "BUFF detect FAIL", cv::Point(20, 35),
+                                cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0, 0, 255), 2);
                 }
             }
             else{
-                std::cout<<"detectsuccess"<<std::endl;
-
                 //xty::
                 //新加：buff_dual_target_active,buff_switch_to_second,buff_prev_shoot_cmd
 
@@ -496,98 +628,152 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
                     buff_detector.drawDebugOverlay(frame->image, true);
                 }
                 int detected_buff_cnt = buff_detector.getDetectedArmorCount();
+                buff_detect_cnt_shared->store(detected_buff_cnt);
                 if (detected_buff_cnt <= 0) {
                     //xty::更改此处逻辑，不加哨兵的大偏角。
-                    *buff_pitch = imu.pitch_now ;
-                    *buff_yaw = imu.yaw_now ;
+                    writeBuffAimState(buff_aim_state, false, imu.pitch_now, imu.yaw_now);
                     buff_success = false;
+                    buff_selected_idx_shared->store(-1);
                     buff_two_target_cycle = false;
                     buff_dual_target_active->store(false);
                     buff_switch_to_second->store(false);
                     buff_prev_shoot_cmd->store(false);
-                    continue;
-                }
-
-                int selected_idx = 0;
-                if (detected_buff_cnt == 1) {
-                    bool previously_dual = buff_dual_target_active->load();
-                    bool previously_switched = buff_switch_to_second->load();
-                    
-                    // 如果之前是在双目标模式且已经切换到了第二个，
-                    // 即使现在只剩一个，如果它刚好是我们正在打的那个（原来的第二个），
-                    // 我们需要确保逻辑的一致性，或者在目标消失时重置。
-                    // 这里的逻辑：如果只剩一个，优先认为它是剩下的那个。
-                    selected_idx = 0;
-                    
-                    // 如果单帧只剩一个，通常意味着其中一个被击打熄灭或遮挡
-                    // 重置双目标标志，回到单目标逻辑
-                    if (previously_dual && previously_switched) {
-                        std::cout << "[BUFF] Dual mode finished, continuing with last armor" << std::endl;
+                    if (should_log_buff_pipeline) {
+                        INFO("[buff_pipeline] no armor mode={}, det_cnt=0, imu_pitch={}, imu_yaw={}",
+                             buff_mode, imu.pitch_now, imu.yaw_now);
                     }
-
-                    buff_two_target_cycle = false;
-                    buff_dual_target_active->store(false);
-                    buff_switch_to_second->store(false);
-                    // buff_prev_shoot_cmd 不重置，保持连贯性
-                } else {
-                    auto now_tp = std::chrono::steady_clock::now();
-                    if (!buff_two_target_cycle) {
-                        buff_two_target_cycle = true;
-                        buff_cycle_start = now_tp;
-                        buff_primary_idx = 0;
-                        buff_secondary_idx = 1;
-                        buff_dual_target_active->store(true);
-                        buff_switch_to_second->store(false);
-                        buff_prev_shoot_cmd->store(false);
-                    }
-
-                    double elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now_tp - buff_cycle_start).count() / 1000.0;
-                    if (elapsed > 1.0) {
-                        buff_cycle_start = now_tp;
-                        buff_switch_to_second->store(false);
-                        buff_prev_shoot_cmd->store(false);
-                    }
-
-                    // 2个目标：首发后立即切向第二目标
-                    selected_idx = buff_switch_to_second->load() ? buff_secondary_idx : buff_primary_idx;
-                }
-
-                auto buffCameraPoints{buff_detector.getCameraPointsByIndex(static_cast<std::size_t>(selected_idx))}; //R标+裝甲板5點
-                if (buffCameraPoints.size() != 6) {
-                    *buff_pitch = imu.pitch_now + 90.0;
-                    *buff_yaw = imu.yaw_now + 90.0;
-                    buff_success = false;
-                    continue;
-                }
-                // buff_calculator
-                //这里应該要整入time了
-                //buff+time predict。
-                buff_calculator.buff_frame.set(frame->image, std::chrono::steady_clock::now(), imu.pitch_now, imu.yaw_now, imu.roll_now); //pitch, yaw, roll
-                std::cout<<"imu.actual_bullet_speed:"<<imu.actual_bullet_speed<<std::endl;
-                bool buffResult = buff_calculator.calculate(buff_calculator.buff_frame, buffCameraPoints, buff_mode, imu.actual_bullet_speed > 20.0 ? imu.actual_bullet_speed*100 : 24.0 * 100 , reload_big_buff); 
-                if (!buffResult) {
-                    std::cout<<"buff_calculator fail"<<std::endl;
-                    *buff_pitch = imu.pitch_now + 90.0;
-                    *buff_yaw = imu.yaw_now + 90.0;
-                    buff_success = false;
-                }
-                else{
-                    std::cout<<"完成了buff_calculator"<<std::endl;
-                    // 更新共享变量
-                    *buff_pitch = buff_calculator.get_predictPitch();
-                    *buff_yaw = buff_calculator.get_predictYaw();
-                    buff_success = true;
-
-                    //xty::visionalize buff_calculator result;
-
-                    // 可视化预测点
                     if (draw_overlay) {
-                        cv::Point2f predictPixel = buff_calculator.getPredictPixel();
-                        cv::circle(frame->image, predictPixel, 6, cv::Scalar(0, 0, 255), -1); // Red circle for target center
-                        cv::putText(frame->image, "Target Center", predictPixel + cv::Point2f(10, 10), cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 255), 2);
+                        cv::putText(frame->image, "BUFF no armor", cv::Point(20, 70),
+                                    cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0, 0, 255), 2);
                     }
-                }            
-                
+                }
+                else {
+                    if (draw_overlay) {
+                        cv::putText(frame->image,
+                                    "BUFF mode=" + std::to_string(buff_mode) + " det=" + std::to_string(detected_buff_cnt),
+                                    cv::Point(20, 35), cv::FONT_HERSHEY_SIMPLEX, 0.8,
+                                    cv::Scalar(0, 255, 255), 2);
+                    }
+
+                    int selected_idx = 0;
+                    if (!buff_dual_target_enable || detected_buff_cnt == 1) {
+                        bool previously_dual = buff_dual_target_active->load();
+                        bool previously_switched = buff_switch_to_second->load();
+                        
+                        buff_two_target_cycle = false;
+                        buff_dual_target_active->store(false);
+                        buff_switch_to_second->store(false);
+                        buff_prev_shoot_cmd->store(false);
+                        if (should_log_buff_pipeline && buff_dual_target_enable && previously_dual && previously_switched) {
+                            INFO("[buff_pipeline] dual target cycle finished, continue with last armor");
+                        }
+                    } else {
+                        auto now_tp = std::chrono::steady_clock::now();
+                        if (!buff_two_target_cycle) {
+                            buff_two_target_cycle = true;
+                            buff_cycle_start = now_tp;
+                            buff_primary_idx = 0;
+                            buff_secondary_idx = 1;
+                            buff_dual_target_active->store(true);
+                            buff_switch_to_second->store(false);
+                            buff_prev_shoot_cmd->store(false);
+                        }
+
+                        double elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now_tp - buff_cycle_start).count() / 1000.0;
+                        if (elapsed > 1.0) {
+                            buff_cycle_start = now_tp;
+                            buff_switch_to_second->store(false);
+                            buff_prev_shoot_cmd->store(false);
+                        }
+
+                        selected_idx = buff_switch_to_second->load() ? buff_secondary_idx : buff_primary_idx;
+                    }
+
+                    buff_selected_idx_shared->store(selected_idx);
+
+                    if (draw_overlay) {
+                        cv::putText(frame->image,
+                                    "BUFF sel=" + std::to_string(selected_idx)
+                                    + " dual_en=" + std::to_string(static_cast<int>(buff_dual_target_enable))
+                                    + " dual=" + std::to_string(static_cast<int>(buff_dual_target_active->load()))
+                                    + " sw2=" + std::to_string(static_cast<int>(buff_switch_to_second->load()))
+                                    + " shoot=" + std::to_string(buff_last_shoot_flag->load()),
+                                    cv::Point(20, 105), cv::FONT_HERSHEY_SIMPLEX, 0.72,
+                                    cv::Scalar(255, 255, 0), 2);
+                    }
+
+                    auto buffCameraPoints{buff_detector.getCameraPointsByIndex(static_cast<std::size_t>(selected_idx))};
+                    if (buffCameraPoints.size() != 6) {
+                        writeBuffAimState(buff_aim_state, false, imu.pitch_now + 90.0f, imu.yaw_now + 90.0f);
+                        buff_success = false;
+                        if (should_log_buff_pipeline) {
+                            INFO("[buff_pipeline] invalid camera points mode={}, det_cnt={}, selected_idx={}, points={}",
+                                 buff_mode, detected_buff_cnt, selected_idx, buffCameraPoints.size());
+                        }
+                    } else {
+                        if (draw_overlay) {
+                            const cv::Point2f r_pt = buffCameraPoints[0];
+                            const cv::Point2f c_pt = buffCameraPoints[1];
+                            cv::circle(frame->image, c_pt, 10, cv::Scalar(0, 0, 255), 2);
+                            cv::circle(frame->image, r_pt, 7, cv::Scalar(255, 0, 255), 2);
+                            cv::line(frame->image, r_pt, c_pt, cv::Scalar(255, 0, 255), 2);
+                            cv::putText(frame->image, "BUFF selected target", c_pt + cv::Point2f(10, -10),
+                                        cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 255), 2);
+                        }
+                        buff_calculator.buff_frame.set(frame->image, std::chrono::steady_clock::now(), imu.pitch_now, imu.yaw_now, imu.roll_now);
+                        bool buffResult = buff_calculator.calculate(
+                            buff_calculator.buff_frame,
+                            buffCameraPoints,
+                            buff_mode,
+                            imu.actual_bullet_speed > 20.0f ? imu.actual_bullet_speed : 24.0f,
+                            reload_big_buff);
+                        if (!buffResult) {
+                            writeBuffAimState(buff_aim_state, false, imu.pitch_now + 90.0f, imu.yaw_now + 90.0f);
+                            buff_success = false;
+                            if (should_log_buff_pipeline) {
+                                INFO("[buff_pipeline] calc fail mode={}, det_cnt={}, selected_idx={}, bullet_speed={}",
+                                     buff_mode, detected_buff_cnt, selected_idx,
+                                     imu.actual_bullet_speed > 20.0f ? imu.actual_bullet_speed : 24.0f);
+                            }
+                            if (draw_overlay) {
+                                cv::putText(frame->image, "BUFF calc FAIL", cv::Point(20, 70),
+                                            cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0, 0, 255), 2);
+                            }
+                        }
+                        else{
+                            const float predict_pitch = static_cast<float>(buff_calculator.get_predictPitch());
+                            const float predict_yaw = static_cast<float>(buff_calculator.get_predictYaw());
+                            writeBuffAimState(buff_aim_state, true, predict_pitch, predict_yaw);
+                            buff_success = true;
+                            if (should_log_buff_pipeline) {
+                                INFO("[buff_pipeline] calc ok mode={}, det_cnt={}, selected_idx={}, pitch={}, yaw={}",
+                                     buff_mode, detected_buff_cnt, selected_idx, predict_pitch, predict_yaw);
+                            }
+
+                            if (draw_overlay) {
+                                cv::putText(frame->image,
+                                            "BUFF calc OK pitch=" + std::to_string(predict_pitch).substr(0, 6)
+                                            + " yaw=" + std::to_string(predict_yaw).substr(0, 6),
+                                            cv::Point(20, 70), cv::FONT_HERSHEY_SIMPLEX, 0.75,
+                                            cv::Scalar(0, 255, 0), 2);
+                            }
+
+                            if (draw_overlay) {
+                                cv::Point2f predictPixel = buff_calculator.getPredictPixel();
+                                const int cross_half = 8;
+                                cv::line(frame->image,
+                                         cv::Point2f(predictPixel.x - cross_half, predictPixel.y - cross_half),
+                                         cv::Point2f(predictPixel.x + cross_half, predictPixel.y + cross_half),
+                                         cv::Scalar(0, 0, 255), 2);
+                                cv::line(frame->image,
+                                         cv::Point2f(predictPixel.x - cross_half, predictPixel.y + cross_half),
+                                         cv::Point2f(predictPixel.x + cross_half, predictPixel.y - cross_half),
+                                         cv::Scalar(0, 0, 255), 2);
+                                cv::putText(frame->image, "Target Center", predictPixel + cv::Point2f(10, 10), cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 255), 2);
+                            }
+                        }
+                    }
+                }
             }
         }
         //xjj
@@ -595,20 +781,17 @@ bool draw_debug_image = param["debug_on_image"].Bool();: 读取 debug_on_image �
         //if(udp_enable)
          //   UdpSend::sendTail();
         if(web_debug_enable)
-            VideoStreamer::setFrame(frame->image);
+        VideoStreamer::setFrame(frame->image);
+
         if(record_enable)
         {
-            INFO("ADD FRAME");
-            // while(camera_data_pack.size() > 0)
-            // {
-            //     auto camera_data = camera_data_pack.front();
-            //     camera_data_pack.pop();
-            //     Recorder::instance().addFrame(camera_data);
-            // }
-            //debug mode
+            if (detailed_debug_log) {
+                INFO("ADD FRAME");
+            }
             Recorder::instance().addFrame(frame);
-            INFO("FINISH FRAME");
-
+            if (detailed_debug_log) {
+                INFO("FINISH FRAME");
+            }
         }
     }
     VideoStreamer::cleanup();

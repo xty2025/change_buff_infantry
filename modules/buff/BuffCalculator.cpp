@@ -1,10 +1,78 @@
 #include <atomic>
+#include <cmath>
 #include <mutex>
 
 #include "BuffCalculator.hpp"
+#include "Log/log.hpp"
 #include "Param/param.hpp"
 
 namespace power_rune {
+
+void BuffCalculator::loadShootTableAdjust(const param::Param& json_param) {
+    if (json_param.exists("buff") && json_param["buff"].exists("shoot_table_adjust")) {
+        auto static_param = json_param["buff"]["shoot_table_adjust"];
+        static_shoot_table_adjust_enable = static_param["enable"].Bool();
+        if (static_shoot_table_adjust_enable) {
+            const char* static_keys[] = {"intercept", "coef_z", "coef_d", "coef_z2", "coef_zd", "coef_d2"};
+            for (std::size_t i = 0; i < sizeof(static_keys) / sizeof(static_keys[0]); ++i) {
+                static_pitch_adjust_param[i] = static_param["pitch"][static_keys[i]].Double();
+                static_yaw_adjust_param[i] = static_param["yaw"][static_keys[i]].Double();
+            }
+            INFO("buff static shoot table adjust enabled from buff.shoot_table_adjust");
+        }
+    }
+
+    if (!json_param["buff"].exists("buff_shooting_table_calib")) {
+        return;
+    }
+
+    auto calib_param = json_param["buff"]["buff_shooting_table_calib"];
+    buff_shoot_table_adjust_enable = calib_param["enable"].Bool();
+    if (calib_param.exists("apply_on_big_buff_only")) {
+        buff_shoot_table_big_only = calib_param["apply_on_big_buff_only"].Bool();
+    }
+
+    if (!buff_shoot_table_adjust_enable) {
+        return;
+    }
+
+    const char* keys[] = {"intercept", "coef_sin", "coef_cos", "coef_sin2",
+                          "coef_cos2", "coef_dist", "coef_height"};
+    for (std::size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); ++i) {
+        buff_pitch_adjust_param[i] = calib_param["pitch"][keys[i]].Double();
+        buff_yaw_adjust_param[i] = calib_param["yaw"][keys[i]].Double();
+    }
+
+    INFO("buff shooting table calib enabled: big_only={}", buff_shoot_table_big_only);
+}
+
+double BuffCalculator::fitStaticShootTableDeg(const std::array<double, 6>& coeffs, double z_height_m,
+                                              double horizontal_distance_m) const {
+    const double z2 = z_height_m * z_height_m;
+    const double d2 = horizontal_distance_m * horizontal_distance_m;
+    const double zd = z_height_m * horizontal_distance_m;
+    return coeffs[0] +
+           coeffs[1] * z_height_m +
+           coeffs[2] * horizontal_distance_m +
+           coeffs[3] * z2 +
+           coeffs[4] * zd +
+           coeffs[5] * d2;
+}
+
+double BuffCalculator::fitBuffPeriodicDeg(const std::array<double, 7>& coeffs, double rotation_angle,
+                                          double distance_m, double height_m) const {
+    const double sin_theta = std::sin(rotation_angle);
+    const double cos_theta = std::cos(rotation_angle);
+    const double sin_2theta = std::sin(2.0 * rotation_angle);
+    const double cos_2theta = std::cos(2.0 * rotation_angle);
+    return coeffs[0] +
+           coeffs[1] * sin_theta +
+           coeffs[2] * cos_theta +
+           coeffs[3] * sin_2theta +
+           coeffs[4] * cos_2theta +
+           coeffs[5] * distance_m +
+           coeffs[6] * height_m;
+}
 
 /**
  * @brief 解算，分别进行预处理，矩阵解算，设置第一次检测，角度解算，旋转方向解算和预测
@@ -14,8 +82,6 @@ bool BuffCalculator::calculate(const Frame &frame, std::vector<cv::Point2f> &cam
     m_frameTime = frame.m_time;
     m_receiveRoll = frame.m_roll;
     m_buff_mode = buff_mode;
-    int pitch_a = 5.7; //上正
-    int yaw_a = -0.7; //左正
     m_receivePitch = frame.m_pitch + COMPANSATE_PITCH;
     m_receiveYaw = frame.m_yaw + COMPANSATE_YAW;
     std::cout<<"m_receiveRoll:"<<m_receiveRoll<<std::endl;
@@ -41,7 +107,8 @@ bool BuffCalculator::calculate(const Frame &frame, std::vector<cv::Point2f> &cam
     directionCal();
     std::cout<<"111111111111111111111"<<std::endl;
     if (m_direction == Direction::UNKNOWN) {
-        return false;
+        // Keep following the currently observed fan center until direction is stable enough to classify.
+        m_direction = Direction::STABLE;
     }
     if (predict() == false) { // 这里面判定大小符模式
         return false;
@@ -92,9 +159,7 @@ bool BuffCalculator::matrixCal() {
         gimbal2Robot(angle2Radian(m_receivePitch), angle2Radian(m_receiveYaw), angle2Radian(m_receiveRoll));
     m_matW2R = m_matG2R * m_matC2G * m_matW2C;
     m_rMatW2R = m_matW2R(cv::Rect(0, 0, 3, 3));
-    m_distance2Target = (cv::norm(m_matW2C.col(3)) * 1e-3 ) ;
-    // std::cout<<"old:"
-    m_distance2Target = 6.8;
+    m_distance2Target = cv::norm(m_matW2C.col(3)) * 1e-3;
     // std::cout<<"org_distance2Target:"<<org_distance2Target<<"m"<<std::endl;
     // m_distance2Target = fitDistance(org_distance2Target);
     std::cout<<"m_distance2Target:"<<m_distance2Target<<"m"<<std::endl;
@@ -250,14 +315,21 @@ bool BuffCalculator::predict() {
             angle = -angle;
         }
     }
+    m_predictRotationAngle = angle;
     cv::Mat matrixWorld = (cv::Mat_<double>(4, 1) << power_radius * std::sin(angle),
                            power_radius - power_radius * std::cos(angle), 0.0, 1.0);
     cv::Mat matrixRobot{m_matW2R * matrixWorld};
     m_predictRobot = {(float)(matrixRobot.at<double>(0, 0)), (float)(matrixRobot.at<double>(1, 0)),
                       (float)(matrixRobot.at<double>(2, 0))};
     auto [predictPitch, predictYaw] = getPitchYawFromRobotCoor(m_predictRobot, m_bulletSpeed);
-    m_predictPitch = predictPitch;//12.3432;//predictPitch;
-    m_predictYaw = predictYaw;//10.7121;//predictYaw;
+    if (buff_shoot_table_adjust_enable && (!buff_shoot_table_big_only || m_buff_mode == 2)) {
+        const double distance_m = getPredictDistanceM();
+        const double height_m = getPredictHeightM();
+        predictPitch += fitBuffPeriodicDeg(buff_pitch_adjust_param, m_predictRotationAngle, distance_m, height_m);
+        predictYaw += fitBuffPeriodicDeg(buff_yaw_adjust_param, m_predictRotationAngle, distance_m, height_m);
+    }
+    m_predictPitch = predictPitch;
+    m_predictYaw = predictYaw;
     m_predictPixel = getPixelFromRobot(m_predictRobot, m_matW2C, m_matW2R);
 #if CONSOLE_OUTPUT >= 2
     MUTEX.lock();
@@ -352,6 +424,11 @@ std::pair<double, double> BuffCalculator::getPitchYawFromRobotCoor(const cv::Poi
     //TODO 
     double pitch{radian2Angle(std::atan(result)) + AFTER_PITCH}; //+ COMPANSATE_PITCH//弧度轉角度 //todo 看COMPANSATE_pitch/yaw能否解決不同距離, 不能就做線性
     double yaw{radian2Angle(-std::atan2(target.x, target.z)) + AFTER_YAW}; //+ COMPANSATE_YAW
+    const double height_m = target.y * 1e-3;
+    if (static_shoot_table_adjust_enable) {
+        pitch += fitStaticShootTableDeg(static_pitch_adjust_param, height_m, horizontal);
+        yaw += fitStaticShootTableDeg(static_yaw_adjust_param, height_m, horizontal);
+    }
     std::cout<<"after_pitch:"<<pitch<<std::endl;
     std::cout<<"after_yaw:"<<yaw<<std::endl;
     return std::make_pair(pitch, yaw);
@@ -468,7 +545,8 @@ std::array<double, 5> ransacFitting(const std::vector<std::pair<double, double>>
     // 初始参数
 
 
-    //xty::a/w应设为0.47？
+    //xty::
+    //a/w搴旇涓?.47锛?
     //std::array<double, 5> params{0.9125, 1.942, 0, 1.178, 0};
     std::array<double, 5> params{0.469, 1.942, 0, 1.177, 0};
     

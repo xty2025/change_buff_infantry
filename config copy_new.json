@@ -6,6 +6,7 @@
         "web_debug": true,
         
         "debug_on_image": false,
+        "detailed_debug_log": false,
         "record_enable": true,
         "UDP": {
             "enable": false,
@@ -20,6 +21,10 @@
             "response_speed": 0.01,
             "pic_camera_x": 640.0,
             "pic_camera_y": 512.0,
+            "pitch_offset_enable": false,
+            "pitch_offset_deg": 0.0,
+            "pitch_offset_per_meter": 0.0,
+            "pitch_offset_ref_distance": 5.0,
             "mouse_require": true
         },
         "solver":
@@ -73,6 +78,77 @@
         "exposure_time": 7000,
         "gain": 16,
 
+        "enemy_color" : "auto",
+        "shoot_enable": true,
+        "force_shoot" : false
+    },
+    "chuan":
+    {
+        "auto_white_balance": true,
+        "web_debug": true,
+        "debug_on_image": true,
+        "detailed_debug_log": false,
+        "record_enable": false,
+        "UDP": {
+            "enable": true,
+            "ip": "192.168.137.95",
+            "port": 4096
+        },
+        "controller":
+        {
+            "shoot_table_adjust": {
+            "enable": true,
+            "pitch":
+            {
+                "intercept": 0.394905,
+                "coef_z": -0.714196,
+                "coef_d": -0.130248,
+                "coef_z2": -3.473239,
+                "coef_zd": -0.154906,
+                "coef_d2": 0.020643
+            },
+            "yaw":
+            {
+                "intercept": 0.132047,
+                "coef_z": -2.540410,
+                "coef_d": -0.007447,
+                "coef_z2": -1.624219,
+                "coef_zd": 0.321300,
+                "coef_d2": 0.016892
+            }
+        },
+            "gun_offset": [107, 0, 0],
+            "shoot_delay": 0.0,
+            "response_speed": 0.5,
+            "pic_camera_x": 640.0,
+            "pic_camera_y": 512.0,
+            "mouse_require": false
+        },
+        "solver":
+        {
+            "camera_offset": [2.0,0,99.5],
+            "camera_rotation": [0, 0, 0],
+            "camera_intrinsic_matrix": [
+                [1281.925130116191, 0, 635.0266907284044],
+                [0, 1279.898079124673, 513.5036990406455],
+                [0, 0, 1]
+            ],
+            "camera_distortion_matrix": [
+                -0.236870, 0.289094, -0.0005722589, 0.0006412545, -0.209813
+            ]
+        },
+        "detector":
+        {
+            "model_path": "../utils/models/BRpoints_nano.xml",
+            "#model_path": "../utils/models/armor_yolo_x.xml",
+            "use_old_model": false,
+            "car_model_path": "../utils/models/yolo11n-416sgd4.xml"
+        },
+        "serial_name": "/dev/ttyACM0|/dev/ttyACM1|/dev/ttyUSB0|/dev/ttyUSB1",
+        "baud_rate": 115200,
+        "camera_id": "auto",
+        "exposure_time": 4000,
+        "gain": 12,
         "enemy_color" : "auto",
         "shoot_enable": true,
         "force_shoot" : false

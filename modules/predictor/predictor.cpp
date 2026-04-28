@@ -80,14 +80,6 @@ namespace predictor {
             CXYD temp;
             double leftx = trackResult.bounding_rect.x;
             double rightx = trackResult.bounding_rect.x + trackResult.bounding_rect.width;
-            // double topy = trackResult.bounding_rect.y;
-            // double bottomy = trackResult.bounding_rect.y + trackResult.bounding_rect.height;
-
-            //xty:
-
-
-            double topy = trackResult.bounding_rect.y;
-            double bottomy = trackResult.bounding_rect.y + trackResult.bounding_rect.height;
             if(measures.find(trackResult.car_id) == measures.end())
                 continue;//只检测到框没有装甲板，则舍弃
             for(auto& measure_tuple: measures[trackResult.car_id])
@@ -104,26 +96,8 @@ namespace predictor {
                 double yaw_diff = std::remainder(std::get<0>(measure_tuple)[5] - std::get<0>(measure_tuple)[4], 2 * M_PI)/2.0;
                 std::get<0>(measure_tuple)[6] = yaw_diff + std::get<0>(measure_tuple)[4];
 
-                //xty:
-
-
-                // 仿照 yaw 左右边界逻辑，构建 pitch 上下边界观测。
-                temp = std::get<2>(measure_tuple).cxy;
-                temp.cy = topy;
-                edge.cxy = temp;
-                std::get<0>(measure_tuple)[7] = static_cast<PYD>(edge.pyd_imu).pitch;
-
-                temp.cy = bottomy;
-                edge.cxy = temp;
-                std::get<0>(measure_tuple)[8] = static_cast<PYD>(edge.pyd_imu).pitch;
-
-                double pitch_diff = std::remainder(std::get<0>(measure_tuple)[8] - std::get<0>(measure_tuple)[7], 2 * M_PI) / 2.0;
-                std::get<0>(measure_tuple)[9] = pitch_diff + std::get<0>(measure_tuple)[7];
-
                 INFO("left-right: {}, {}", std::get<0>(measure_tuple)[5], std::get<0>(measure_tuple)[4]);
                 INFO("left-right = {}", std::get<0>(measure_tuple)[5] - std::get<0>(measure_tuple)[4]);
-                INFO("top-bottom pitch: {}, {}", std::get<0>(measure_tuple)[7], std::get<0>(measure_tuple)[8]);
-                INFO("top-bottom pitch = {}", std::get<0>(measure_tuple)[8] - std::get<0>(measure_tuple)[7]);
                 std::get<3>(measure_tuple) = true;
             }
         }
@@ -207,7 +181,7 @@ namespace predictor {
             prediction.armors[i].theta = prediction.theta + M_PI / 2 * i;
             double see_angle = std::atan2(state[0],state[2]);
             double armor_angle = std::remainder(prediction.armors[i].theta - M_PI / 2 - see_angle, 2 * M_PI);
-            if(armor_angle < M_PI / 6 && armor_angle > -M_PI / 6)
+            if(armor_angle < M_PI / 3 && armor_angle > -M_PI / 3)
             {
                 prediction.armors[i].status = Armor::AVAILABLE;
             }

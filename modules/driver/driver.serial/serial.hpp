@@ -2,6 +2,7 @@
 #include <thread>
 #include <queue>
 #include <mutex>
+#include <chrono>
 #include <boost/asio.hpp>
 #include <boost/bind/bind.hpp>
 #include "driver/type.hpp"
@@ -52,6 +53,9 @@ namespace serial
             std::mutex serial_data_mutex_;
             std::mutex write_mutex_;
             std::queue<ParsedSerialData> serial_data_queue_;
+            bool detailed_debug_log_ = true;
+            std::chrono::steady_clock::time_point last_send_log_time_{};
+            bool has_last_send_log_time_ = false;
 
             std::function<void(const ParsedSerialData&)> read_callback_;
 

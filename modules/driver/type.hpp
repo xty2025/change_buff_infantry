@@ -17,6 +17,7 @@ namespace driver
     {
         std::string portName;
         int baudRate;
+        bool detailedDebugLog = true;
     };
 
     struct CameraConfig

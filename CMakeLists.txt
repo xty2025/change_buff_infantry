@@ -11,9 +11,20 @@ message(STATUS "CMAKE_RUNTIME_OUTPUT_DIRECTORY: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY
 # 导入外部库
 # 创建一个接口库来共享第三方库
 add_library(third_party_libs INTERFACE)
+
+# 閬垮厤 conda 鐨?CMake package 瑕嗙洊绯荤粺搴擄紝灏ゅ叾鏄?Boost/curl/tiff 閾炬帴閾捐矾銆?
+if(DEFINED ENV{CONDA_PREFIX} AND NOT "$ENV{CONDA_PREFIX}" STREQUAL "")
+    list(APPEND CMAKE_IGNORE_PREFIX_PATH "$ENV{CONDA_PREFIX}")
+    list(APPEND CMAKE_IGNORE_PATH "$ENV{CONDA_PREFIX}" "$ENV{CONDA_PREFIX}/lib" "$ENV{CONDA_PREFIX}/include")
+    set(CMAKE_IGNORE_PREFIX_PATH "${CMAKE_IGNORE_PREFIX_PATH}" CACHE STRING "Ignored prefixes" FORCE)
+    set(CMAKE_IGNORE_PATH "${CMAKE_IGNORE_PATH}" CACHE STRING "Ignored paths" FORCE)
+    message(STATUS "Ignoring conda prefix for CMake package resolution: $ENV{CONDA_PREFIX}")
+endif()
+
 find_package(OpenCV REQUIRED)
 find_package(Eigen3 REQUIRED)
-find_package(Boost CONFIG REQUIRED COMPONENTS system)
+set(Boost_DIR "/usr/lib/x86_64-linux-gnu/cmake/Boost-1.74.0" CACHE PATH "System Boost config" FORCE)
+find_package(Boost 1.74 CONFIG REQUIRED COMPONENTS system)
 ## xty::
 # 优先查找 /usr/local 下的 spdlog，解决版本冲突 (1.16 vs 1.9)
 set(spdlog_DIR "/usr/local/lib/cmake/spdlog")
@@ -39,7 +50,7 @@ if(GXIAPI_LIB)
     message(STATUS "Found GXIAPI_LIB: ${GXIAPI_LIB}")
     target_link_libraries(third_party_libs INTERFACE ${GXIAPI_LIB})
 else()
-    message(FATAL_ERROR "GXIAPI_LIB not found")
+    message(WARNING "GXIAPI_LIB not found; continuing without camera SDK link")
 endif()
 
 
@@ -76,10 +87,19 @@ target_link_libraries(AutoAim PRIVATE third_party_libs modules_libs)
 add_executable(Calib Calib.cpp)
 target_link_libraries(Calib PRIVATE third_party_libs modules_libs)
 
+add_executable(ShootingTableCalibration ShootingTableCalibration.cpp)
+target_link_libraries(ShootingTableCalibration PRIVATE third_party_libs modules_libs)
+
+add_executable(BuffStaticShootingTableCalibration BuffStaticShootingTableCalibration.cpp)
+target_link_libraries(BuffStaticShootingTableCalibration PRIVATE third_party_libs modules_libs)
+
+add_executable(BuffShootingTableCalibration BuffShootingTableCalibration.cpp)
+target_link_libraries(BuffShootingTableCalibration PRIVATE third_party_libs modules_libs)
+
 #add_executable(calib_infantry calib_infantry.cpp)
 #target_link_libraries(calib_infantry PRIVATE third_party_libs modules_libs)
 
-#add_executable(RecordSolveData RecordSolveData.cpp)
-#target_link_libraries(RecordSolveData PRIVATE third_party_libs modules_libs)
+add_executable(RecordSolveData RecordSolveData.cpp)
+target_link_libraries(RecordSolveData PRIVATE third_party_libs modules_libs)
 #add_executable(tempAutoAim tempAutoAim.cpp)
 #target_link_libraries(tempAutoAim PRIVATE third_party_libs modules_libs)

@@ -125,14 +125,11 @@ struct measureFunc{
         //xty:
 
 
-        // pitch 轴上下边界观测（轮腿上下小陀螺）
-        // 用车体中心水平距离估计上/下边界对应的俯仰角。
-        T center_dist = ceres::sqrt(x * x + y * y);
-        T z_top = max(s[8], s[9]);
-        T z_bottom = min(s[8], s[9]);
-        m[7] = ceres::atan2(z_top, center_dist);
-        m[8] = ceres::atan2(z_bottom, center_dist);
-        m[9] = ceres::atan2((s[8] + s[9]) * T(0.5), center_dist);
+        // Reuse the continuous center pitch instead of bbox-derived top/bottom pitch.
+        // The bbox path introduces quantized pitch observations that show up as steps.
+        m[7] = m[0];
+        m[8] = m[0];
+        m[9] = m[0];
     }
     int id;
     int total_id1 = -1;

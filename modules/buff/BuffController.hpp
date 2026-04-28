@@ -21,7 +21,9 @@ namespace power_rune {
             BuffController();
             ~BuffController();
 
-            BuffControlResult buff_control(const ParsedSerialData& parsedData, std::shared_ptr<float> buff_pitch, std::shared_ptr<float> buff_yaw) const;
+            BuffControlResult buff_control(const ParsedSerialData& parsedData,
+                                           float target_pitch,
+                                           float target_yaw) const;
         };
 
 }

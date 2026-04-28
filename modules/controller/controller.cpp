@@ -1,422 +1,287 @@
 #include "controller.hpp"
+#include <algorithm>
 #include <cmath>
 #include <Log/log.hpp>
 #include <Udpsend/udpsend.hpp>
 
-/*
-- 1.
-多层次容错机制 ：
-
-- 首选特定装甲板
-- 备选最近装甲板
-- 最后退化到车体中心
-- 2.
-物理模型补偿 ：
-
-- 重力补偿确保远距离命中精度
-- 飞行时间限制保证系统响应性
-- 3.
-特殊模式支持 ：
-
-- 陀螺自瞄模式的特殊处理
-- 鼠标模式的坐标转换
-- 4.
-精确射击控制 ：
-
-- 双方向角度偏差检查
-- 精确的射击时机判断
-*/
+const double PI = 3.1415926;
 
 auto controller::createController(param::Param json_param) -> std::shared_ptr<controller::Controller>
 {
-    return std::make_unique<controller::Controller>(json_param);
+    return std::make_shared<controller::Controller>(json_param);
 }
-
 
 using namespace controller;
 using namespace aimlog;
 using param::Param;
 
+Controller::Controller(const param::Param& json_param) : json_param_(json_param) {
+    readJsonParam();
+    initializeComponents();
+}
+
 void Controller::registPredictFunc(std::function<Predictions(Time::TimeStamp)> predictFunc)
 {
     this->predictFunc = predictFunc;
 }
+
 void Controller::readJsonParam()
 {
-    mouse_require = json_param["mouse_require"].Bool();
-    pic_camera_x = json_param["pic_camera_x"].Double();
-    pic_camera_y = json_param["pic_camera_y"].Double();
-    response_speed = json_param["response_speed"].Double();
-    shootDelay = std::chrono::duration<double>(json_param["shoot_delay"].Double());
+    mouse_require_ = json_param_["mouse_require"].Bool();
+    pic_camera_x_ = json_param_["pic_camera_x"].Double();
+    pic_camera_y_ = json_param_["pic_camera_y"].Double();
+    response_speed_ = json_param_["response_speed"].Double();
+    if (json_param_.exists("yaw_smoothing")) {
+        yaw_smoothing_enable_ = json_param_["yaw_smoothing"]["enable"].Bool();
+        yaw_smoothing_alpha_ = json_param_["yaw_smoothing"]["alpha"].Double();
+        yaw_smoothing_alpha_ = std::clamp(yaw_smoothing_alpha_, 0.0, 1.0);
+    }
+    shoot_delay_ = std::chrono::duration<double>(json_param_["shoot_delay"].Double());
+    shoot_table_adjust_ = json_param_["shoot_table_adjust"]["enable"].Bool();
+
+    pitch_param_.resize(6, 0.0);
+    yaw_param_.resize(6, 0.0);
+
+    if (shoot_table_adjust_) {
+        pitch_param_[0] = json_param_["shoot_table_adjust"]["pitch"]["intercept"].Double();
+        pitch_param_[1] = json_param_["shoot_table_adjust"]["pitch"]["coef_z"].Double();
+        pitch_param_[2] = json_param_["shoot_table_adjust"]["pitch"]["coef_d"].Double();
+        pitch_param_[3] = json_param_["shoot_table_adjust"]["pitch"]["coef_z2"].Double();
+        pitch_param_[4] = json_param_["shoot_table_adjust"]["pitch"]["coef_zd"].Double();
+        pitch_param_[5] = json_param_["shoot_table_adjust"]["pitch"]["coef_d2"].Double();
+
+        yaw_param_[0] = json_param_["shoot_table_adjust"]["yaw"]["intercept"].Double();
+        yaw_param_[1] = json_param_["shoot_table_adjust"]["yaw"]["coef_z"].Double();
+        yaw_param_[2] = json_param_["shoot_table_adjust"]["yaw"]["coef_d"].Double();
+        yaw_param_[3] = json_param_["shoot_table_adjust"]["yaw"]["coef_z2"].Double();
+        yaw_param_[4] = json_param_["shoot_table_adjust"]["yaw"]["coef_zd"].Double();
+        yaw_param_[5] = json_param_["shoot_table_adjust"]["yaw"]["coef_d2"].Double();
+    }
 }
 
-static bool thetaInRange(double theta_deg, double range_deg)
+void Controller::initializeComponents()
 {
-    theta_deg = std::remainder(theta_deg, 360.0);
-    if(std::abs(theta_deg) < range_deg)
-        return true;
-    else
-        return false;
-} 
+    state_manager_ = std::make_unique<TargetStateManager>();
+    state_manager_->configure(10, 3, 5);
 
-bool Controller::judgeAimNew(bool request)
-{
-    aim_new = false;
-    if(((!aiming) && request) || (aiming && (!request)))
-    {
-        accumulate_aim_request++;
-    }
-    else
-    {
-        accumulate_aim_request = 0;
-    }
-    if(accumulate_aim_request > waitFrame)
-    {
-        accumulate_aim_request = 0;
-        aiming = request;
-        if(aiming)
-            aim_new = true;
-    }
-    return aim_new;
+    target_selector_ = std::make_unique<DistanceBasedSelector>(
+        mouse_require_, pic_camera_x_, pic_camera_y_, response_speed_);
+
+    ballistic_calculator_ = std::make_unique<BallisticCalculator>();
+    ballistic_calculator_->configure(max_iter_, tol_, bullet_mass_, bullet_diameter_,
+                                     bullet_speed_, shoot_table_adjust_, pitch_param_, yaw_param_);
+
+    shoot_decider_ = std::make_unique<ShootDecider>();
+    ShootConditions conditions;
+    conditions.angle_tolerance_x = tol_deltax_;
+    conditions.angle_tolerance_y = tol_deltay_;
+    shoot_decider_->configure(conditions);
 }
 
-//ControlResult control(const ParsedSerialData& parsedData);
+double Controller::applyYawSmoothing(double target_yaw, double current_yaw, bool reset)
+{
+    target_yaw = current_yaw + std::remainder(target_yaw - current_yaw, 360.0);
+
+    if (!yaw_smoothing_enable_) {
+        return target_yaw;
+    }
+
+    if (reset || !yaw_filter_initialized_) {
+        last_yaw_setpoint_ = target_yaw;
+        yaw_filter_initialized_ = true;
+        return last_yaw_setpoint_;
+    }
+
+    double yaw_delta = std::remainder(target_yaw - last_yaw_setpoint_, 360.0);
+    last_yaw_setpoint_ += yaw_smoothing_alpha_ * yaw_delta;
+    last_yaw_setpoint_ = current_yaw + std::remainder(last_yaw_setpoint_ - current_yaw, 360.0);
+    return last_yaw_setpoint_;
+}
+
 ControlResult Controller::control(const ParsedSerialData& parsedData)
 {
-    if(judgeAimNew(parsedData.aim_request))
-    {
+    if (judgeAimNew(parsedData.aim_request)) {
         aim_armor_id = std::make_pair(-1, -1);
-    }
-    if(parsedData.actual_bullet_speed > min_bullet_speed)
-    {
-        INFO("parsedData.actual_bullet_speed:{}",parsedData.actual_bullet_speed);
-        //弹速的解算：
-        
-        if(bullet_speed == 0)
-        {
-            bullet_speed = parsedData.actual_bullet_speed;
-        }
-        else
-        {
-            bullet_speed = parsedData.actual_bullet_speed * bullet_speed_alpha + (1 - bullet_speed_alpha) * bullet_speed;
-        }
+        TargetInfo reset_target;
+        state_manager_->setCurrentTarget(reset_target);
     }
 
     bool aim_center_request = parsedData.aim_request == 3;
 
+    auto predictions = getPredictions(parsedData);
+    if (predictions.empty()) {
+        WARN("No prediction");
+        return createEmptyResult(parsedData);
+    }
 
+    auto target = handleTargetSelection(predictions, parsedData);
+    if (!target.isValid()) {
+        WARN("No valid target");
+        return createEmptyResult(parsedData);
+    }
+
+    aim_armor_id = std::make_pair(target.car_id, target.armor_id);
+
+    if (aim_center_request) {
+        return handleCenterAimRequest(predictions, parsedData, target);
+    }
+
+    auto pred_it = std::find_if(predictions.begin(), predictions.end(),
+        [&](const auto& pred) { return pred.id == target.car_id; });
+    if (pred_it == predictions.end()) {
+        WARN("Prediction not found");
+        return createEmptyResult(parsedData);
+    }
+
+    if (target.armor_id < 0) {
+        auto ballistic_result = ballistic_calculator_->calculate(
+            pred_it->center.x, pred_it->center.y, pred_it->center.z);
+        if (!ballistic_result.success) {
+            WARN("calcPitchYaw failed for center");
+            return createEmptyResult(parsedData);
+        }
+
+        cached_fly_time_ = std::chrono::duration<double>(ballistic_result.time);
+        return buildControlResult(parsedData, ballistic_result, nullptr, false);
+    }
+
+    auto armor_it = std::find_if(pred_it->armors.begin(), pred_it->armors.end(),
+        [&](const auto& armor) { return armor.id == target.armor_id; });
+    if (armor_it == pred_it->armors.end()) {
+        WARN("Armor not found");
+        return createEmptyResult(parsedData);
+    }
+
+    auto ballistic_result = ballistic_calculator_->calculate(
+        armor_it->center.x, armor_it->center.y, armor_it->center.z);
+    if (!ballistic_result.success) {
+        WARN("calcPitchYaw failed");
+        return createEmptyResult(parsedData);
+    }
+
+    bool should_shoot = shoot_decider_->shouldShoot(
+        *armor_it, parsedData, ballistic_result.pitch, ballistic_result.yaw);
+
+    cached_fly_time_ = std::chrono::duration<double>(ballistic_result.time);
+
+    return buildControlResult(parsedData, ballistic_result, &(*armor_it), should_shoot);
+}
+
+Predictions Controller::getPredictions(const ParsedSerialData& parsedData)
+{
+    auto predictions = predictFunc(Time::TimeStamp::now() + cached_fly_time_);
+
+    if (!predictions.empty()) {
+        updateFlyTime(predictions);
+        predictions = predictFunc(Time::TimeStamp::now() + cached_fly_time_);
+    }
+
+    return predictions;
+}
+
+void Controller::updateFlyTime(const Predictions& predictions)
+{
+    auto current_target = state_manager_->getCurrentTarget();
+    if (!current_target.isValid()) return;
+
+    auto it = std::find_if(predictions.begin(), predictions.end(),
+        [&](const auto& prediction) { return prediction.id == current_target.car_id; });
+    if (it != predictions.end()) {
+        double distance = sqrt(it->center.x * it->center.x + it->center.y * it->center.y);
+        if (distance > 0.0) {
+            cached_fly_time_ = std::chrono::duration<double>(distance / ballistic_calculator_->getBulletSpeed());
+        }
+    }
+}
+
+TargetInfo Controller::handleTargetSelection(const Predictions& predictions, const ParsedSerialData& parsedData)
+{
+    state_manager_->updateState(predictions, parsedData.aim_request);
+    auto current_target = state_manager_->getCurrentTarget();
+
+    if (!current_target.isValid()) {
+        current_target = target_selector_->selectBestCar(predictions, parsedData);
+        if (current_target.isValid()) {
+            state_manager_->setCurrentTarget(current_target);
+        }
+    }
+
+    if (current_target.isValid()) {
+        current_target = target_selector_->selectBestArmor(predictions, current_target, parsedData);
+        state_manager_->setCurrentTarget(current_target);
+    }
+
+    return current_target;
+}
+
+ControlResult Controller::handleCenterAimRequest(const Predictions& predictions,
+                                                 const ParsedSerialData& parsedData,
+                                                 const TargetInfo& target)
+{
+    auto pred_it = std::find_if(predictions.begin(), predictions.end(),
+        [&](const auto& pred) { return pred.id == target.car_id; });
+    if (pred_it == predictions.end()) {
+        return createEmptyResult(parsedData);
+    }
+
+    auto ballistic_result = ballistic_calculator_->calculate(
+        pred_it->center.x, pred_it->center.y, pred_it->center.z);
+    if (!ballistic_result.success) {
+        return createEmptyResult(parsedData);
+    }
+
+    auto result = buildControlResult(parsedData, ballistic_result, nullptr, false);
+    cached_fly_time_ = std::chrono::duration<double>(ballistic_result.time);
+
+    auto future_predictions = predictFunc(Time::TimeStamp::now() + cached_fly_time_ + shoot_delay_);
+    auto future_pred_it = std::find_if(future_predictions.begin(), future_predictions.end(),
+        [&](const auto& pred) { return pred.id == target.car_id; });
+
+    if (future_pred_it != future_predictions.end()) {
+        result.shoot_flag = shoot_decider_->shouldShootAtCenter(
+            future_pred_it->armors, parsedData, ballistic_calculator_.get());
+    }
+
+    return result;
+}
+
+ControlResult Controller::buildControlResult(const ParsedSerialData& parsedData,
+                                             const BallisticResult& ballistic,
+                                             const Armor* target_armor,
+                                             bool should_shoot)
+{
+    (void)target_armor;
     ControlResult result;
-    //为什么放在里面？创建之后留返回的接口
+    result.valid = ballistic.success;
+
+    if (ballistic.success) {
+        result.pitch_setpoint = ballistic.pitch * 180 / PI;
+        result.yaw_setpoint = ballistic.yaw * 180 / PI;
+        result.yaw_setpoint = applyYawSmoothing(result.yaw_setpoint, parsedData.yaw_now);
+    } else {
+        result.pitch_setpoint = parsedData.pitch_now;
+        result.yaw_setpoint = parsedData.yaw_now;
+        yaw_filter_initialized_ = false;
+    }
+
+    result.pitch_actual_want = result.pitch_setpoint;
+    result.yaw_actual_want = result.yaw_setpoint;
+    result.shoot_flag = should_shoot;
+
+    INFO("aim_pitch:{},aim_yaw:{}", result.pitch_setpoint, result.yaw_setpoint);
+
+    return result;
+}
+
+ControlResult Controller::createEmptyResult(const ParsedSerialData& parsedData)
+{
+    ControlResult result;
+    yaw_filter_initialized_ = false;
     result.yaw_setpoint = parsedData.yaw_now;
     result.pitch_setpoint = parsedData.pitch_now;
     result.pitch_actual_want = parsedData.pitch_now;
     result.yaw_actual_want = parsedData.yaw_now;
     result.valid = false;
     result.shoot_flag = false;
-
-    Predictions predictions_for_time = predictFunc(Time::TimeStamp::now() + flyTime);
-    if (predictions_for_time.empty())
-    {
-        WARN("No prediction");
-        return result;
-    }
-    //找车：如果没有就找相机最近的一个车。
-    bool is_valid_car_id = std::any_of(predictions_for_time.begin(), predictions_for_time.end(),
-        [&](const auto& prediction) { return prediction.id == aim_armor_id.first; });
-    //std::any_of() 是C++ STL算法库中的一个函数，用于检查范围内的元[&](const auto& prediction) { return prediction.id == aim_armor_id.first; }: 这是一个lambda表达式（匿名函数）素是否满足特定条件
-    //[&](const auto& prediction) { return prediction.id == aim_armor_id.first; } :
-    // 这是一个lambda表达式（匿名函数），作为判断条件
-    //predictions_for_time返回的指标是预测数据的迭代器。代表返回vector<it.begin(),it.end()>
-    if (!is_valid_car_id)
-    {
-        WARN("Invalid car id");
-        //重新选择一个相机距离最近的
-        double min_distance = std::numeric_limits<double>::max();
-        bool found = false;
-        location::Location tmp;
-        tmp.imu = ImuData(parsedData);
-        //调用param中的imu数据 
-        for (const auto& prediction : predictions_for_time)
-        {
-            double distance;
-            if(!mouse_require)
-                distance = prediction.center.x * prediction.center.x + prediction.center.y * prediction.center.y;
-            else
-            //在鼠标模式下，需要根据相机坐标和鼠标坐标计算距离
-            {
-                tmp.xyz_imu = prediction.center;
-                CXYD tmp_cxy = tmp.cxy;
-                distance = (tmp_cxy.cx - pic_camera_x) * (tmp_cxy.cx - pic_camera_x) + (tmp_cxy.cy - pic_camera_y) * (tmp_cxy.cy - pic_camera_y);
-            }
-            if (distance < min_distance)
-            {
-                min_distance = distance;
-                aim_armor_id.first = prediction.id;
-                aim_armor_id.second = -1;
-                found = true;
-            }
-        }
-        if(!found)
-        {
-            WARN("No available car");
-            return result;
-        }
-    }
-    //屎山：重复了h,后续不用重新检测it迭代
-    auto it = std::find_if(predictions_for_time.begin(), predictions_for_time.end(),
-        [&](const auto& prediction) { return prediction.id == aim_armor_id.first; });
-    if (it == predictions_for_time.end())
-    {
-        WARN("New car id invalid(shouldn't happen)");
-        return result;
-    }
-    //
-    //重新查找当前目标在预测中的位置，目标丢失直接返回。
-    //calc new flytime。
-    double distance = sqrt(it->center.x * it->center.x + it->center.y * it->center.y);
-    
-    if (distance > 0.0)
-    {
-        flyTime = std::chrono::duration<double>(distance / bullet_speed);//粗略计算
-        predictions_for_time = predictFunc(Time::TimeStamp::now() + flyTime);
-    
-        it = std::find_if(predictions_for_time.begin(), predictions_for_time.end(),
-        [&](const auto& prediction) { return prediction.id == aim_armor_id.first; });
-    }
-
-    if (it == predictions_for_time.end())
-    {
-        WARN("New car id invalid after flytime update");
-        return result;
-    }
-    //这里是armor_id,前面是car_id;
-    bool is_valid_armor_id = std::any_of(it->armors.begin(), it->armors.end(),
-        [&](const auto& armor) { return (armor.id == aim_armor_id.second) && (armor.status == Armor::AVAILABLE); });
-    if(is_valid_armor_id)
-    {
-        //计算临界角
-        double radius = (aim_armor_id.second % 2 == 0)?it->r1:it->r2;
-        //偶数ID用r1，奇数用r2当半径。
-        double jump_angle = M_PI / 4 - ((std::abs(it->omega)>0.01)?(1/(1+1.414*distance*response_speed/radius/std::abs(it->omega))):(0));
-        //设置动态补偿项，防止角度 too small
-        //- 目标距离越远，需要的提前角越大
-        //- 旋转速度越快，需要的提前角越小
-        //- 半径越大，需要的提前角越小
-        //- 响应速度越快，需要的提前角越大
-        INFO("BADANGLE:{}",jump_angle);
-        if(jump_angle<0)jump_angle = M_PI / 6;
-        /*装甲板切换逻辑:
-        1. 1.
-        顺时针旋转 (omega>0)且 当前装甲板偏航角超过临界角 时：
-        - 切换到下一个装甲板： (aim_armor_id.second + 3) % 4
-        - 例如：0→3, 1→0, 2→1, 3→2
-        2. 2.
-        逆时针旋转 (omega<0)且 当前装甲板偏航角低于负临界角 时：
-        - 切换到上一个装甲板： (aim_armor_id.second + 1) % 4
-        - 例如：0→1, 1→2, 2→3, 3→0*/
-        if(std::abs(it->omega)>0.6)//ANTI ROTATE。
-        {
-            if(it->omega>0&&it->armors[aim_armor_id.second].yaw>jump_angle)
-            {
-                aim_armor_id.second = (aim_armor_id.second + 3) % 4;
-            }
-            else if(it->omega<0&&it->armors[aim_armor_id.second].yaw<-jump_angle)
-            {
-                aim_armor_id.second = (aim_armor_id.second + 1) % 4;
-            }
-            is_valid_armor_id = std::any_of(it->armors.begin(), it->armors.end(),
-                                                 [&](const auto& armor) { return (armor.id == aim_armor_id.second) && (armor.status == Armor::AVAILABLE); });
-        }
-        //重新检查新切换的装甲板是否有效和可用,用到了顺逆
-    }
-    bool found = false;
-    if (!is_valid_armor_id) {
-        WARN("Invalid armor id");
-        INFO("Invalid armor :{}",aim_armor_id.second);
-        if(aim_armor_id.second >= 0)
-            INFO("Invalid for yaw:{}",it->armors[aim_armor_id.second].yaw);
-        //重新选择一个距离最近的
-        double min_distance = std::numeric_limits<double>::max();
-        location::Location tmp;
-        tmp.imu = ImuData(parsedData);
-        for (const auto &armor: it->armors) {
-            if (armor.status == Armor::AVAILABLE) {
-                double distance;
-                if (!mouse_require)
-                    distance = armor.center.x * armor.center.x + armor.center.y * armor.center.y;
-                else {
-                    tmp.xyz_imu = armor.center;
-                    CXYD tmp_cxy = tmp.cxy;
-                    distance = (tmp_cxy.cx - pic_camera_x) * (tmp_cxy.cx - pic_camera_x) +
-                               (tmp_cxy.cy - pic_camera_y) * (tmp_cxy.cy - pic_camera_y);
-                }
-                if (distance < min_distance) {
-                    min_distance = distance;
-                    aim_armor_id.second = armor.id;
-                    found = true;
-                }
-            }
-        }
-    }
-    
-    //如果没有找到可用的装甲板，或者目标丢失，直接返回。
-    if (((!is_valid_armor_id)&&(!found)) || aim_center_request)
-    {
-        WARN("No available armor");
-        WARN("Now choose to aim at the car");
-        double pitch = 0.0;
-        double yaw = 0.0;
-        double time = 0.0;
-        bool success = calcPitchYaw(pitch, yaw, time, it->center.x, it->center.y, it->center.z);
-        if (!success)
-        {
-            WARN("calcPitchYaw failed");
-            return result;
-        }
-        result.pitch_setpoint = pitch * 180 / PI;
-        result.yaw_setpoint = yaw * 180 / PI;
-        result.yaw_setpoint = parsedData.yaw_now + std::remainder(result.yaw_setpoint - parsedData.yaw_now, 360.0);
-        result.pitch_actual_want = result.pitch_setpoint;
-        result.yaw_actual_want = result.yaw_setpoint;
-        result.valid = true;
-        result.shoot_flag = false;
-        flyTime = std::chrono::duration<double>(time);
-        INFO("aim_pitch:{},aim_yaw:{}", result.pitch_setpoint, result.yaw_setpoint);
-    }
-    if(aim_center_request)
-    {
-        predictions_for_time = predictFunc(Time::TimeStamp::now() + flyTime + shootDelay);
-        it = std::find_if(predictions_for_time.begin(), predictions_for_time.end(),
-                          [&](const auto& prediction) { return prediction.id == aim_armor_id.first; });
-        if (it == predictions_for_time.end())
-        {
-            WARN("New car id invalid after flytime update");
-            return result;
-        }
-        for(int i=0;i<4;i++)
-        {
-            double pitch,yaw,time;
-            if(it->armors[i].status == Armor::AVAILABLE)
-            {
-                auto armor_it = it->armors[i];
-                if (!calcPitchYaw(pitch, yaw, time, armor_it.center.x, armor_it.center.y, armor_it.center.z))
-                {
-                    WARN("calcPitchYaw failed");
-                    continue;
-                }
-            }
-            //判断是否是可以射击的标志
-            double delta_yaw = std::remainder(pitch - parsedData.pitch_now * M_PI / 180 ,2 * M_PI);
-            double delta_pitch = std::remainder(yaw - parsedData.yaw_now * M_PI / 180 ,2 * M_PI);
-            double dist = it->armors[i].center.dist();
-            if(std::tan(delta_yaw)*dist<tol_deltax && std::tan(delta_pitch)*dist<tol_deltay)
-            {
-                result.shoot_flag = true;
-                return result;
-            }//是否在阈值内
-        }
-        result.shoot_flag = false;
-        return result;
-    }
-    /*射击判断逻辑 ：
-1. 1.
-   计算角度偏差（使用 std::remainder 处理角度周期性）
-2. 2.
-   将角度偏差转换为距离偏差： tan(角度差) * 距离
-3. 3.
-   如果两个方向的距离偏差都小于容忍阈值，则允许射击
-4. 4.
-   一旦找到可射击的装甲板就立即返回*/
-    auto armor_it = std::find_if(it->armors.begin(), it->armors.end(),
-        [&](const auto& armor) { return armor.id == aim_armor_id.second; });
-    if (armor_it == it->armors.end())
-    {
-        WARN("Invalid armor id (shoudln't happen)");
-        return result;
-    }
-    //should calc new time
-    //but now we just use the old time
-    double pitch = 0.0;
-    double yaw = 0.0;
-    double time = 0.0;
-    if (!calcPitchYaw(pitch, yaw, time, armor_it->center.x, armor_it->center.y, armor_it->center.z))
-    {
-        WARN("calcPitchYaw failed");
-        return result;
-    }
-    result.pitch_setpoint = pitch * 180 / PI;
-    result.yaw_setpoint = yaw * 180 / PI;
-    result.yaw_setpoint = parsedData.yaw_now + std::remainder(result.yaw_setpoint - parsedData.yaw_now, 360.0);
-    result.valid = true;
-
-    double delta_yaw = std::remainder(pitch - parsedData.pitch_now * M_PI / 180 ,2 * M_PI);
-    double delta_pitch = std::remainder(yaw - parsedData.yaw_now * M_PI / 180 ,2 * M_PI);
-    double dist = armor_it->center.dist();
-    if(std::tan(delta_yaw)*dist<tol_deltax && std::tan(delta_pitch)*dist<tol_deltay)
-    {
-        result.shoot_flag = true;
-    }
-    else
-        result.shoot_flag = false;
-    INFO("flyTime:{}",flyTime.count());
     return result;
-
-    //xty:
-    //防止无返回值。
-    // 保底返回，防止编译器提示某些路径没有返回值（尽管逻辑上应已覆盖所有情况）
-    ControlResult fallback_result;
-    fallback_result.yaw_setpoint = parsedData.yaw_now;
-    fallback_result.pitch_setpoint = parsedData.pitch_now;
-    fallback_result.pitch_actual_want = parsedData.pitch_now;
-    fallback_result.yaw_actual_want = parsedData.yaw_now;
-    fallback_result.valid = false;
-    fallback_result.shoot_flag = false;
-    return fallback_result;
 }
-
-bool Controller::calcPitchYaw(double& pitch, double& yaw, double& time, double target_x, double target_y, double target_z){
-// Param param("../config.json");
-
-//     param = param[param["car_name"].String()];
-//     double twohigh = param["2m_highoffset"].Double();
-//     double fivehigh = param["5m_highoffset"].Double();
-//     double finalhigh = (std::sqrt(target_x * target_x + target_y * target_y) - 2.0)/3.0 * (fivehigh - twohigh) + twohigh;
-//     target_z += finalhigh;
-    INFO("targetx,y,z:{},{},{}",target_x,target_y,target_z);
-    double distance = sqrt(target_x * target_x + target_y * target_y);
-    //double theta = atan2(target_z, distance);
-    double theta = pitch;
-    double delta_z = 0.0;
-    // 首先计算空气阻力系数 K
-    double k1 = C_D * RHO * (PI * bullet_diameter * bullet_diameter) / 8 / bullet_mass;
-    for (int i = 0; i < max_iter; i++)
-    {
-        // 计算炮弹的飞行时间
-        double t = (exp(k1 * distance) - 1) / (k1 * bullet_speed * cos(theta));
-
-        delta_z = target_z - bullet_speed * sin(theta) * t / cos(theta) + 0.5 * GRAVITY * t * t / cos(theta) / cos(theta);
-        // DLOG(INFO) << "delta_y: " << delta_y;
-
-        // 不断更新theta，直到小于某一个阈值
-        if (fabs(delta_z) < tol)
-        {
-            time = t;
-            break;
-        }
-
-        // 更新角度
-        theta -= delta_z / (-(bullet_speed * t) / pow(cos(theta), 2) + GRAVITY * t * t / (bullet_speed * bullet_speed) * sin(theta) / pow(cos(theta), 3));
-    }
-    if(fabs(delta_z) > tol)
-    {
-        //不更新pitch和yaw
-        WARN("calcPitchYaw failed");
-        return false;//计算失败
-    }
-    else
-    {
-        pitch = theta;
-        yaw = atan2(target_y, target_x);
-        return true;
-    }
-} // namespace controller

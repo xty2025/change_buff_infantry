@@ -107,6 +107,7 @@ void Serial::sendSerialData(const ControlResult& control_result)
 void Serial::setSerialConfig(SerialConfig config) {
     available_ports_ = splitPorts(config.portName);
     baud_rate_ = config.baudRate;
+    detailed_debug_log_ = config.detailedDebugLog;
     if(available_ports_.empty()) {
         ERROR("No available serial ports found.");
         return;
@@ -168,6 +169,7 @@ void Serial::stopSerialThread() {
 std::function<void(const serial::ControlResult&)> Serial::sendSerialFunc() {
     return [this](const ControlResult& result) {
         std::lock_guard<std::mutex> lock(write_mutex_);
+        
         ControlResult result_ = result;
         // Serialize and send data (implementation depends on data structure)
                 //static Param param("../config.json");
@@ -188,8 +190,16 @@ std::function<void(const serial::ControlResult&)> Serial::sendSerialFunc() {
         //              });
         boost::system::error_code ec;
         write(serial_port_, buffer(*write_buffer), ec);
-        INFO("send pitch: {}", result.pitch_setpoint);
-        INFO("send yaw: {}", result.yaw_setpoint);
+        const auto now = std::chrono::steady_clock::now();
+        const bool should_log_detail = detailed_debug_log_
+            || !has_last_send_log_time_
+            || now - last_send_log_time_ >= std::chrono::seconds(1);
+        if (should_log_detail) {
+            last_send_log_time_ = now;
+            has_last_send_log_time_ = true;
+            INFO("[serial_send] pitch={}, yaw={}, shoot_flag={}, valid={}",
+                 result.pitch_setpoint, result.yaw_setpoint, static_cast<int>(result.shoot_flag), result.valid);
+        }
         if (ec) {
             ERROR("Error during write: {}", ec.message());
         }

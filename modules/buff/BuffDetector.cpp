@@ -8,6 +8,22 @@
 #include <algorithm>
 #include <iomanip>
 #include <sstream>
+#include <iostream>
+#include <cstdlib>
+
+namespace {
+bool isHighGuiDisplayAvailable() {
+    const char* disable_imshow = std::getenv("DISABLE_OPENCV_IMSHOW");
+    if (disable_imshow != nullptr && disable_imshow[0] != '\0' && disable_imshow[0] != '0') {
+        return false;
+    }
+
+    const char* display = std::getenv("DISPLAY");
+    const char* wayland_display = std::getenv("WAYLAND_DISPLAY");
+    return (display != nullptr && display[0] != '\0') ||
+           (wayland_display != nullptr && wayland_display[0] != '\0');
+}
+} // namespace
 
 namespace power_rune {
 // std::mutex MUTEX; //
@@ -24,12 +40,22 @@ namespace power_rune {
 BuffDetector :: BuffDetector(std::string& red_buff_model_path, std::string& blue_buff_model_path){
     m_blue_buff_model_path = blue_buff_model_path;            
     blue_core = ov::Core();
-    blue_compiled_model = blue_core.compile_model(m_blue_buff_model_path, "CPU", ov::hint::performance_mode(ov::hint::PerformanceMode::LATENCY));
+    blue_compiled_model = blue_core.compile_model(
+        m_blue_buff_model_path,
+        "CPU",
+        ov::hint::performance_mode(ov::hint::PerformanceMode::LATENCY),
+        ov::inference_num_threads(1),
+        ov::hint::enable_cpu_pinning(false));
     blue_request = blue_compiled_model.create_infer_request();
 
     m_red_buff_model_path = red_buff_model_path;            
     red_core = ov::Core();
-    red_compiled_model = red_core.compile_model(m_red_buff_model_path, "CPU", ov::hint::performance_mode(ov::hint::PerformanceMode::LATENCY));
+    red_compiled_model = red_core.compile_model(
+        m_red_buff_model_path,
+        "CPU",
+        ov::hint::performance_mode(ov::hint::PerformanceMode::LATENCY),
+        ov::inference_num_threads(1),
+        ov::hint::enable_cpu_pinning(false));
     red_request = red_compiled_model.create_infer_request();
 };
 
@@ -56,12 +82,8 @@ bool BuffDetector::buffDetect(const cv::Mat& frame, int enemy_color) {
     m_last_class_ids.clear();
     m_last_confidences.clear();
     m_last_confidence = 0.0f;
-    std::cout<<m_enemy_color<<"5555555555555"<<std::endl;
-
-    std::cout<<"开始detectArmor"<<std::endl;
 
     if (findBuffArmor(m_armor) == false) {
-        std::cout<<"裝甲板fail"<<std::endl;
         return false;
     }
 
@@ -87,6 +109,9 @@ void BuffDetector::drawDebugOverlay(cv::Mat& image, bool print_coords) const {
     if (image.empty()) {
         return;
     }
+    //xty::
+    //璋冭瘯杩欓噷鍏虫帀鏂囧瓧鍙互鍘嬬缉
+    //print_coords=false;
 
     if (m_has_raw_detect) {
         for (size_t i = 0; i < m_last_boxes.size(); ++i) {
@@ -132,13 +157,6 @@ void BuffDetector::drawDebugOverlay(cv::Mat& image, bool print_coords) const {
         }
     }
 
-    if (print_coords && m_has_valid_armor) {
-        std::cout << "[BUFF] Detected counts: " << m_armors.size() << std::endl;
-        for (size_t i = 0; i < m_armors.size(); ++i) {
-            const auto& a = m_armors[i];
-            std::cout << "[BUFF][" << i << "][BOX] x=" << a.m_box_x << ", y=" << a.m_box_y << std::endl;
-        }
-    }
 }
 
 // 前向声明：将 letterbox 后的坐标映射回原始图像并设置到 Armor
@@ -164,7 +182,7 @@ bool BuffDetector::findBuffArmor(Armor& armor) {
     input_image=input_image;//转换后的。
     //创建推理。
     blob = cv::dnn::blobFromImage(letterbox_img, 1.0 / 255.0, cv::Size(MODEL_IMG_SIZE, MODEL_IMG_SIZE), cv::Scalar(), true);
-    cv::imshow("letterbox_img", letterbox_img);
+    static bool s_highgui_available = false && isHighGuiDisplayAvailable();
     /*cv::dnn::blobFromImage(
     letterbox_img,          // 输入图像（经过letterbox预处理的图像）
     1.0 / 255.0,            // 缩放因子（将像素值从[0,255]归一化到[0,1]）
@@ -174,30 +192,26 @@ bool BuffDetector::findBuffArmor(Armor& armor) {
 )
 */
 
-    if (m_enemy_color == 0) //I am 0->red, hit red buff
-    {
-        request = red_request;
-        compiled_model = red_compiled_model;
-    }
-    else if (m_enemy_color == 1) //I am 1->blue
-    {
-        request = blue_request;
-        compiled_model = blue_compiled_model;
+    ov::InferRequest* active_request = &red_request;
+    ov::CompiledModel* active_model = &red_compiled_model;
+    if (m_enemy_color == 1) { // I am 1->blue
+        active_request = &blue_request;
+        active_model = &blue_compiled_model;
     }
 
     // 设置输入张量
-    auto input_port = compiled_model.input();//bin
+    auto input_port = active_model->input();//bin
     //推理：
     ov::Tensor input_tensor(input_port.get_element_type(), input_port.get_shape(), blob.ptr(0));
-    request.set_input_tensor(input_tensor);
+    active_request->set_input_tensor(input_tensor);
     // 推理
     auto start_time = std::chrono::high_resolution_clock::now();
-    request.infer(); //推理
+    active_request->infer(); //鎺ㄧ悊
     auto end_time = std::chrono::high_resolution_clock::now();
     auto inference_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
-    std::cout<<"inference_time:"<<inference_time<<std::endl;
+    (void)inference_time;
     // 获取输出张量
-    ov::Tensor output_tensor = request.get_output_tensor();
+    ov::Tensor output_tensor = active_request->get_output_tensor();
     const float* output_data = output_tensor.data<float>();
     const std::size_t det_stride = 24;
     const std::size_t det_count = output_tensor.get_size() / det_stride;
@@ -333,7 +347,8 @@ void Armor::setRoiArmor(std::vector<cv::Point2f> keypoints) {
 cv::Mat BuffDetector::letterbox_image(const cv::Mat& image, const cv::Size& new_shape) {
     int ih = image.rows;
     int iw = image.cols;
-    std::cout<<"letterbox_height & width:"<<ih<<", "<<iw<<std::endl;
+    (void)ih;
+    (void)iw;
 
     int w = new_shape.width;
     int h = new_shape.height;
@@ -377,13 +392,11 @@ void BuffDetector::draw_boxes_keypoints(cv::Mat& image, const std::vector<cv::Re
 // 将坐标从模型输入（letterbox 后）映射回原始图像并设置到 Armor
 static bool change_scale(const cv::Mat& globalImage, std::vector<cv::Rect>& boxes, std::vector<cv::Point2f>& keypoints, power_rune::Armor& armor, const float MODEL_IMG_SIZE) {
     if (boxes.empty()) {
-        std::cout << "change_scale: no boxes provided" << std::endl;
         return false;
     }
 
     float original_width = static_cast<float>(globalImage.cols);
     float original_height = static_cast<float>(globalImage.rows);
-    std::cout << "orig W H: " << original_width << " " << original_height << " model_size: " << MODEL_IMG_SIZE << std::endl;
 
     float rate = std::min(MODEL_IMG_SIZE / original_width, MODEL_IMG_SIZE / original_height);
     float dx = (MODEL_IMG_SIZE - original_width * rate) / 2.0f;
@@ -395,9 +408,7 @@ static bool change_scale(const cv::Mat& globalImage, std::vector<cv::Rect>& boxe
         box.y = std::max((box.y - dy) / rate, 0.0f);
         box.width /= rate;
         box.height /= rate;
-        std::cout << "转化后 box: " << box.x << ", " << box.y << ", " << box.width << ", " << box.height << std::endl;
         if (box.x < 0 || box.y < 0) {
-            std::cout << "change_scale: box out of range" << std::endl;
             return false;
         }
     }
@@ -409,10 +420,8 @@ static bool change_scale(const cv::Mat& globalImage, std::vector<cv::Rect>& boxe
         kp.x = std::max((kp.x - dx) / rate, 0.0f);
         kp.y = std::max((kp.y - dy) / rate, 0.0f);
         if (kp.x <= 0 || kp.y <= 0 || kp.x >= original_width || kp.y >= original_height) {
-            std::cout << "change_scale: keypoint out of range" << std::endl;
             return false;
         }
-        std::cout << "转化后 keypoint: " << kp.x << ", " << kp.y << std::endl;
     }
 
     armor.setRoiArmor(keypoints);
